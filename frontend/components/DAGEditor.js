@@ -30,7 +30,7 @@ export default function DAGEditor({ dagJson, onChange }) {
   if (loaded && ReactFlow) {
     const { ReactFlowProvider, ReactFlow: RF, MiniMap, Controls } = ReactFlow;
     return (
-      <div style={{ height: 360, border: "1px solid #e5e7eb", borderRadius: 8 }}>
+      <div className="h-80 border border-gray-300 rounded-lg">
         <ReactFlowProvider>
           <RF elements={elements}>
             <MiniMap />
@@ -44,8 +44,13 @@ export default function DAGEditor({ dagJson, onChange }) {
   // Fallback: show JSON editor
   return (
     <div>
-      <div style={{ marginBottom: 8, color: "#6b7280" }}>DAG editor (JSON)</div>
-      <textarea value={typeof dagJson === "string" ? dagJson : JSON.stringify(dagJson || {}, null, 2)} onChange={(e) => onChange && onChange(e.target.value)} rows={8} style={{ width: "100%", fontFamily: "monospace", padding: "1rem" }} />
+      <div className="mb-2 text-gray-500">DAG editor (JSON)</div>
+      <textarea
+        value={typeof dagJson === "string" ? dagJson : JSON.stringify(dagJson || {}, null, 2)}
+        onChange={(e) => onChange && onChange(e.target.value)}
+        rows={8}
+        className="w-full p-4 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-primary focus:border-transparent"
+      />
     </div>
   );
 }

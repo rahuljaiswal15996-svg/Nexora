@@ -65,76 +65,97 @@ export default function ReviewPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: "#f8fafc", fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
-      <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "2rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2rem", padding: "1.5rem", backgroundColor: "white", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+    <div className="min-h-screen bg-gray-50 font-sans">
+      <div className="max-w-7xl mx-auto p-8">
+        <div className="flex justify-between items-center mb-8 bg-white shadow-md rounded-lg p-6">
           <div>
-            <h1 style={{ margin: 0, fontSize: "2rem", fontWeight: 700, color: "#1f2937" }}>Human-in-the-Loop Review</h1>
-            <p style={{ margin: "0.5rem 0 0 0", color: "#6b7280", fontSize: "1.1rem" }}>Review AI-generated code conversions requiring manual approval.</p>
+            <h1 className="text-3xl font-bold text-primary mb-2">Human-in-the-Loop Review</h1>
+            <p className="text-gray-600 text-lg">Review AI-generated code conversions requiring manual approval.</p>
           </div>
-          <button onClick={seedDemo} disabled={loading} style={{ padding: "12px 24px", borderRadius: "8px", backgroundColor: "#3b82f6", color: "white", border: "none", fontWeight: 600, fontSize: "1rem", cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.1)", transition: "all 0.2s", opacity: loading ? 0.6 : 1 }}>
+          <button
+            onClick={seedDemo}
+            disabled={loading}
+            className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-semibold"
+          >
             {loading ? "Loading..." : "Seed Demo Run"}
           </button>
         </div>
 
         {error && (
-          <div style={{ padding: "1rem", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", color: "#dc2626", marginBottom: "2rem" }}>
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6">
             {error}
           </div>
         )}
 
         {loading ? (
-          <div style={{ textAlign: "center", padding: "4rem" }}>
-            <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>⏳</div>
-            <p style={{ fontSize: "1.2rem", color: "#6b7280" }}>Loading shadow runs...</p>
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">⏳</div>
+            <p className="text-xl text-gray-500">Loading shadow runs...</p>
           </div>
         ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "400px 1fr", gap: "2rem" }}>
-          <div style={{ backgroundColor: "white", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", overflow: "hidden" }}>
-            <div style={{ padding: "1.5rem", borderBottom: "1px solid #e5e7eb" }}>
-              <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600, color: "#1f2937" }}>Pending Reviews ({shadows.length})</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <div className="bg-white shadow-md rounded-lg overflow-hidden">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-800">Pending Reviews ({shadows.length})</h2>
+              </div>
+              <div className="max-h-96 overflow-y-auto p-4">
+                {shadows.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="text-6xl mb-4">📋</div>
+                    No pending shadow runs.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {shadows.map((s) => (
+                      <div
+                        key={s.id}
+                        onClick={() => openShadow(s.id)}
+                        className={`cursor-pointer p-4 rounded-lg border transition-all ${
+                          selected?.id === s.id
+                            ? 'border-primary bg-blue-50 shadow-md'
+                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="font-semibold text-sm text-gray-800">{s.id.slice(0, 8).toUpperCase()}</div>
+                          <div className="text-xs text-gray-500">{new Date(s.created_at).toLocaleString()}</div>
+                        </div>
+                        <div className="mb-2">
+                          <span
+                            className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${
+                              Number(s.confidence) > 0.8
+                                ? 'bg-green-100 text-green-800'
+                                : Number(s.confidence) > 0.6
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {Number(s.confidence).toFixed(3)}
+                          </span>
+                        </div>
+                        <div className="text-sm text-gray-700 line-clamp-2">
+                          {(s.input_blob || "").slice(0, 100)}...
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <div style={{ maxHeight: "600px", overflowY: "auto" }}>
-              {shadows.length === 0 ? (
-                <div style={{ padding: "2rem", textAlign: "center", color: "#6b7280" }}>
-                  <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>📋</div>
-                  No pending shadow runs.
-                </div>
+
+            <div className="lg:col-span-3">
+              {selected ? (
+                <ReviewPanel shadow={selected} onReviewed={handleReviewed} />
               ) : (
-                <div style={{ padding: "1rem" }}>
-                  {shadows.map((s) => (
-                    <div key={s.id} onClick={() => openShadow(s.id)} style={{ cursor: "pointer", padding: "1rem", borderRadius: "8px", border: selected?.id === s.id ? "2px solid #3b82f6" : "1px solid #e5e7eb", backgroundColor: selected?.id === s.id ? "#eff6ff" : "white", marginBottom: "0.75rem", transition: "all 0.2s", boxShadow: selected?.id === s.id ? "0 0 0 3px rgba(59, 130, 246, 0.1)" : "none" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
-                        <div style={{ fontWeight: 600, fontSize: "0.9rem", color: "#1f2937" }}>{s.id.slice(0, 8).toUpperCase()}</div>
-                        <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>{new Date(s.created_at).toLocaleString()}</div>
-                      </div>
-                      <div style={{ marginBottom: "0.5rem" }}>
-                        <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: 500, backgroundColor: Number(s.confidence) > 0.8 ? "#dcfce7" : Number(s.confidence) > 0.6 ? "#fef3c7" : "#fee2e2", color: Number(s.confidence) > 0.8 ? "#166534" : Number(s.confidence) > 0.6 ? "#92400e" : "#dc2626" }}>
-                          {Number(s.confidence).toFixed(3)}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: "0.85rem", color: "#374151", lineHeight: 1.4 }}>
-                        {(s.input_blob || "").slice(0, 100)}...
-                      </div>
-                    </div>
-                  ))}
+                <div className="bg-white shadow-md rounded-lg p-8 text-center border-2 border-dashed border-gray-300">
+                  <div className="text-6xl mb-4">👈</div>
+                  <p className="text-lg text-gray-500">Select a shadow run from the list to inspect and review.</p>
                 </div>
               )}
             </div>
           </div>
-
-          <div>
-            {selected ? (
-              <ReviewPanel shadow={selected} onReviewed={handleReviewed} />
-            ) : (
-              <div style={{ padding: "2rem", borderRadius: "12px", border: "2px dashed #e5e7eb", backgroundColor: "white", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-                <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>👈</div>
-                <p style={{ margin: 0, fontSize: "1.1rem", color: "#6b7280" }}>Select a shadow run from the list to inspect and review.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -13,12 +13,17 @@ export default function MonacoEditorWrapper({ value, onChange, language = "sql",
 
   if (typeof window === "undefined") {
     return (
-      <textarea value={value} onChange={(e) => onChange && onChange(e.target.value)} rows={10} style={{ width: "100%" }} />
+      <textarea
+        value={value}
+        onChange={(e) => onChange && onChange(e.target.value)}
+        rows={10}
+        className="w-full p-4 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-primary focus:border-transparent"
+      />
     );
   }
 
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
+    <div className="border border-gray-300 rounded-lg overflow-hidden">
       <MonacoEditor height={height} defaultLanguage={language} value={value} onChange={onChange} options={options} />
     </div>
   );

@@ -30,33 +30,51 @@ function DiffViewer({ original, converted, language = "sql" }) {
   const diff = computeDiff(original, converted);
 
   const renderUnifiedDiff = () => (
-    <div style={{ fontFamily: "'JetBrains Mono', 'Fira Code', Monaco, 'Courier New', monospace", fontSize: "0.85rem", backgroundColor: "#f8fafc", borderRadius: "8px", padding: "1rem", border: "1px solid #e5e7eb", maxHeight: "400px", overflowY: "auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 600, color: "#1f2937" }}>Unified Diff</h4>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <button onClick={() => setViewMode("unified")} style={{ padding: "4px 8px", borderRadius: "4px", border: viewMode === "unified" ? "1px solid #3b82f6" : "1px solid #d1d5db", backgroundColor: viewMode === "unified" ? "#eff6ff" : "white", color: viewMode === "unified" ? "#3b82f6" : "#6b7280", fontSize: "0.75rem", cursor: "pointer" }}>Unified</button>
-          <button onClick={() => setViewMode("split")} style={{ padding: "4px 8px", borderRadius: "4px", border: viewMode === "split" ? "1px solid #3b82f6" : "1px solid #d1d5db", backgroundColor: viewMode === "split" ? "#eff6ff" : "white", color: viewMode === "split" ? "#3b82f6" : "#6b7280", fontSize: "0.75rem", cursor: "pointer" }}>Split</button>
+    <div className="font-mono text-sm bg-gray-50 rounded-lg p-4 border border-gray-300 max-h-96 overflow-y-auto">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="text-lg font-semibold text-gray-800">Unified Diff</h4>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setViewMode("unified")}
+            className={`px-3 py-1 rounded text-xs font-medium ${
+              viewMode === "unified"
+                ? "border border-primary bg-blue-50 text-primary"
+                : "border border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            Unified
+          </button>
+          <button
+            onClick={() => setViewMode("split")}
+            className={`px-3 py-1 rounded text-xs font-medium ${
+              viewMode === "split"
+                ? "border border-primary bg-blue-50 text-primary"
+                : "border border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
+            }`}
+          >
+            Split
+          </button>
         </div>
       </div>
       {diff.length === 0 ? (
-        <div style={{ textAlign: "center", color: "#6b7280", padding: "2rem" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📄</div>
+        <div className="text-center text-gray-500 py-8">
+          <div className="text-4xl mb-2">📄</div>
           No differences found.
         </div>
       ) : (
         diff.map((line, index) => (
-          <div key={index} style={{ display: "flex", borderBottom: index < diff.length - 1 ? "1px solid #e5e7eb" : "none", padding: "4px 0", alignItems: "flex-start" }}>
-            <div style={{ width: "50px", textAlign: "right", paddingRight: "1rem", color: "#9ca3af", fontSize: "0.8rem", flexShrink: 0 }}>
+          <div key={index} className={`flex border-b border-gray-200 py-1 items-start ${index === diff.length - 1 ? 'border-b-0' : ''}`}>
+            <div className="w-12 text-right pr-4 text-gray-400 text-xs flex-shrink-0">
               {line.lineNumber}
             </div>
-            <div style={{ flex: 1, lineHeight: 1.4 }}>
+            <div className="flex-1 leading-relaxed">
               {line.oldLine && (
-                <div style={{ color: line.changed ? "#dc2626" : "#6b7280", backgroundColor: line.changed ? "#fef2f2" : "transparent", padding: "2px 6px", marginBottom: line.changed ? "2px" : "0", borderRadius: "3px" }}>
+                <div className={`px-2 py-1 rounded ${line.changed ? 'bg-red-100 text-red-700' : 'text-gray-500'}`}>
                   {line.changed ? `- ${line.oldLine}` : `  ${line.oldLine}`}
                 </div>
               )}
               {line.newLine && (
-                <div style={{ color: line.changed ? "#16a34a" : "#6b7280", backgroundColor: line.changed ? "#f0fdf4" : "transparent", padding: "2px 6px", borderRadius: "3px" }}>
+                <div className={`px-2 py-1 rounded ${line.changed ? 'bg-green-100 text-green-700' : 'text-gray-500'}`}>
                   {line.changed ? `+ ${line.newLine}` : `  ${line.newLine}`}
                 </div>
               )}
@@ -68,35 +86,35 @@ function DiffViewer({ original, converted, language = "sql" }) {
   );
 
   const renderSplitDiff = () => (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", fontFamily: "'JetBrains Mono', 'Fira Code', Monaco, 'Courier New', monospace", fontSize: "0.85rem" }}>
-      <div style={{ backgroundColor: "#f8fafc", borderRadius: "8px", padding: "1rem", border: "1px solid #e5e7eb", maxHeight: "400px", overflowY: "auto" }}>
-        <h4 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "1rem", fontWeight: 600, color: "#dc2626" }}>Original (Legacy)</h4>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-sm">
+      <div className="bg-gray-50 rounded-lg p-4 border border-gray-300 max-h-96 overflow-y-auto">
+        <h4 className="text-lg font-semibold text-red-600 mb-4">Original (Legacy)</h4>
         {diff.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#6b7280", padding: "2rem" }}>No content</div>
+          <div className="text-center text-gray-500 py-8">No content</div>
         ) : (
           diff.map((line, index) => (
-            <div key={index} style={{ display: "flex", borderBottom: index < diff.length - 1 ? "1px solid #e5e7eb" : "none", padding: "4px 0", alignItems: "flex-start" }}>
-              <div style={{ width: "40px", textAlign: "right", paddingRight: "0.5rem", color: "#9ca3af", fontSize: "0.8rem", flexShrink: 0 }}>
+            <div key={index} className={`flex border-b border-gray-200 py-1 items-start ${index === diff.length - 1 ? 'border-b-0' : ''}`}>
+              <div className="w-10 text-right pr-2 text-gray-400 text-xs flex-shrink-0">
                 {line.lineNumber}
               </div>
-              <div style={{ flex: 1, backgroundColor: line.changed ? "#fef2f2" : "transparent", color: line.changed ? "#dc2626" : "#374151", padding: "2px 6px", borderRadius: "3px", lineHeight: 1.4 }}>
+              <div className={`flex-1 px-2 py-1 rounded leading-relaxed ${line.changed ? 'bg-red-100 text-red-700' : 'text-gray-700'}`}>
                 {line.oldLine || " "}
               </div>
             </div>
           ))
         )}
       </div>
-      <div style={{ backgroundColor: "#f8fafc", borderRadius: "8px", padding: "1rem", border: "1px solid #e5e7eb", maxHeight: "400px", overflowY: "auto" }}>
-        <h4 style={{ marginTop: 0, marginBottom: "1rem", fontSize: "1rem", fontWeight: 600, color: "#16a34a" }}>Converted (AI)</h4>
+      <div className="bg-gray-50 rounded-lg p-4 border border-gray-300 max-h-96 overflow-y-auto">
+        <h4 className="text-lg font-semibold text-green-600 mb-4">Converted (AI)</h4>
         {diff.length === 0 ? (
-          <div style={{ textAlign: "center", color: "#6b7280", padding: "2rem" }}>No content</div>
+          <div className="text-center text-gray-500 py-8">No content</div>
         ) : (
           diff.map((line, index) => (
-            <div key={index} style={{ display: "flex", borderBottom: index < diff.length - 1 ? "1px solid #e5e7eb" : "none", padding: "4px 0", alignItems: "flex-start" }}>
-              <div style={{ width: "40px", textAlign: "right", paddingRight: "0.5rem", color: "#9ca3af", fontSize: "0.8rem", flexShrink: 0 }}>
+            <div key={index} className={`flex border-b border-gray-200 py-1 items-start ${index === diff.length - 1 ? 'border-b-0' : ''}`}>
+              <div className="w-10 text-right pr-2 text-gray-400 text-xs flex-shrink-0">
                 {line.lineNumber}
               </div>
-              <div style={{ flex: 1, backgroundColor: line.changed ? "#f0fdf4" : "transparent", color: line.changed ? "#16a34a" : "#374151", padding: "2px 6px", borderRadius: "3px", lineHeight: 1.4 }}>
+              <div className={`flex-1 px-2 py-1 rounded leading-relaxed ${line.changed ? 'bg-green-100 text-green-700' : 'text-gray-700'}`}>
                 {line.newLine || " "}
               </div>
             </div>

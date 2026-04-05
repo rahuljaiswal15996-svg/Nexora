@@ -1,21 +1,16 @@
 export default function CodeEditor({ value, onChange, label, readOnly = false }) {
   return (
-    <label style={{ display: "block", marginBottom: "1rem" }}>
-      <div style={{ marginBottom: "0.5rem", fontWeight: "600" }}>{label}</div>
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
       <textarea
         value={value}
         onChange={onChange ? (event) => onChange(event.target.value) : undefined}
         readOnly={readOnly}
         rows={12}
-        style={{
-          width: "100%",
-          padding: "1rem",
-          borderRadius: "8px",
-          border: "1px solid #d1d5db",
-          background: readOnly ? "#f8fafc" : "white",
-          fontFamily: "monospace",
-        }}
+        className={`w-full p-4 border border-gray-300 rounded-lg font-mono ${
+          readOnly ? 'bg-gray-100' : 'bg-white'
+        } focus:ring-2 focus:ring-primary focus:border-transparent`}
       />
-    </label>
+    </div>
   );
 }
