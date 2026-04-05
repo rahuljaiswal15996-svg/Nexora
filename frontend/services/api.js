@@ -1,9 +1,114 @@
-const BASE_PATH = "http://127.0.0.1:8000";
+const BASE_PATH = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+const SESSION_STORAGE_KEY = "nexora.workspace.session";
 
-async function postFormData(path, formData) {
-  const response = await fetch(`${BASE_PATH}${path}`, {
+const DEFAULT_SESSION = {
+  tenant_id: "default",
+  user: "admin@nexora.local",
+  role: "admin",
+  access_token: null,
+};
+
+function isBrowser() {
+  return typeof window !== "undefined";
+}
+
+export function getWorkspaceSession() {
+  if (!isBrowser()) {
+    return { ...DEFAULT_SESSION };
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) {
+      return { ...DEFAULT_SESSION };
+    }
+    return { ...DEFAULT_SESSION, ...JSON.parse(raw) };
+  } catch {
+    return { ...DEFAULT_SESSION };
+  }
+}
+
+function persistWorkspaceSession(session) {
+  if (!isBrowser()) {
+    return session;
+  }
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+  return session;
+}
+
+async function requestDevToken(session) {
+  const response = await fetch(`${BASE_PATH}/auth/token`, {
     method: "POST",
-    body: formData,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tenant_id: session.tenant_id,
+      user: session.user,
+      role: session.role,
+    }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || "Failed to issue dev token");
+  }
+
+  return response.json();
+}
+
+export async function ensureDevSession(options = {}) {
+  const current = getWorkspaceSession();
+  const nextSession = {
+    ...current,
+    tenant_id: options.tenantId || current.tenant_id || DEFAULT_SESSION.tenant_id,
+    user: options.user || current.user || DEFAULT_SESSION.user,
+    role: options.role || current.role || DEFAULT_SESSION.role,
+  };
+
+  if (nextSession.access_token && !options.forceRefresh) {
+    return nextSession;
+  }
+
+  try {
+    const tokenPayload = await requestDevToken(nextSession);
+    return persistWorkspaceSession({
+      ...nextSession,
+      access_token: tokenPayload.access_token,
+    });
+  } catch (error) {
+    console.error("Falling back to header-only session", error);
+    return persistWorkspaceSession(nextSession);
+  }
+}
+
+export async function updateWorkspaceRole(role) {
+  return ensureDevSession({ role, forceRefresh: true });
+}
+
+async function buildHeaders(extraHeaders = {}, body) {
+  const session = await ensureDevSession();
+  const headers = {
+    ...extraHeaders,
+    "X-Tenant-ID": session.tenant_id,
+    "X-User-ID": session.user,
+    "X-User-Role": session.role,
+  };
+
+  if (session.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`;
+  }
+  if (body && !(body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  return headers;
+}
+
+async function apiFetch(path, options = {}) {
+  const { method = "GET", headers = {}, body } = options;
+  const response = await fetch(`${BASE_PATH}${path}`, {
+    method,
+    headers: await buildHeaders(headers, body),
+    body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (!response.ok) {
@@ -11,267 +116,183 @@ async function postFormData(path, formData) {
     throw new Error(text || "Request failed");
   }
 
-  return response.json();
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return response.json();
+  }
+  return response.text();
 }
 
-export async function convertFile(file) {
+function appendConversionOptions(formData, options = {}) {
+  if (options.sourceLanguage) {
+    formData.append("source_language", options.sourceLanguage);
+  }
+  if (options.targetLanguage) {
+    formData.append("target_language", options.targetLanguage);
+  }
+}
+
+async function postFormData(path, formData) {
+  return apiFetch(path, { method: "POST", body: formData });
+}
+
+export async function convertFile(file, options = {}) {
   const formData = new FormData();
   formData.append("file", file);
+  appendConversionOptions(formData, options);
   return postFormData("/convert", formData);
 }
 
-export async function convertText(code) {
+export async function convertText(code, options = {}) {
   const formData = new FormData();
   const blob = new Blob([code], { type: "text/plain" });
   formData.append("file", blob, "code.txt");
+  appendConversionOptions(formData, options);
   return postFormData("/convert", formData);
 }
 
-export async function parseFile(file) {
+export async function parseFile(file, options = {}) {
   const formData = new FormData();
   formData.append("file", file);
+  appendConversionOptions(formData, options);
   return postFormData("/parse", formData);
 }
 
-export async function parseText(code) {
+export async function parseText(code, options = {}) {
   const formData = new FormData();
   const blob = new Blob([code], { type: "text/plain" });
   formData.append("file", blob, "code.txt");
+  appendConversionOptions(formData, options);
   return postFormData("/parse", formData);
 }
 
 export async function createPipeline(dag, name = "unnamed") {
-  const res = await fetch(`${BASE_PATH}/pipelines`, {
+  return apiFetch("/pipelines", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, dag }),
+    body: { name, dag },
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Create pipeline failed");
-  }
-  return res.json();
 }
-// Notebook API functions
+
 export async function createNotebook(title) {
-  const res = await fetch(`${BASE_PATH}/notebooks`, {
+  return apiFetch("/notebooks", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title }),
+    body: { title },
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to create notebook");
-  }
-  return res.json();
 }
 
 export async function listNotebooks() {
-  console.log('API: Fetching notebooks from:', `${BASE_PATH}/notebooks`);
-  const res = await fetch(`${BASE_PATH}/notebooks`);
-  console.log('API: Response status:', res.status);
-  if (!res.ok) {
-    const text = await res.text();
-    console.error('API: Error response:', text);
-    throw new Error(text || "Failed to list notebooks");
-  }
-  const data = await res.json();
-  console.log('API: Response data:', data);
-  return data;
+  return apiFetch("/notebooks");
 }
 
 export async function getNotebook(notebookId) {
-  const res = await fetch(`${BASE_PATH}/notebooks/${notebookId}`);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to get notebook");
-  }
-  return res.json();
+  return apiFetch(`/notebooks/${notebookId}`);
 }
 
 export async function updateNotebook(notebookId, updates) {
-  const res = await fetch(`${BASE_PATH}/notebooks/${notebookId}`, {
+  return apiFetch(`/notebooks/${notebookId}`, {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(updates),
+    body: updates,
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to update notebook");
-  }
-  return res.json();
 }
 
 export async function deleteNotebook(notebookId) {
-  const res = await fetch(`${BASE_PATH}/notebooks/${notebookId}`, {
+  return apiFetch(`/notebooks/${notebookId}`, {
     method: "DELETE",
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to delete notebook");
-  }
-  return res.json();
 }
 
 export async function executeCell(notebookId, cellId) {
-  const res = await fetch(`${BASE_PATH}/notebooks/${notebookId}/cells/${cellId}/execute`, {
+  return apiFetch(`/notebooks/${notebookId}/cells/${cellId}/execute`, {
     method: "POST",
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to execute cell");
-  }
-  return res.json();
 }
 
-// Pipeline Optimization API functions
 export async function getPipelineMetrics(pipelineId) {
-  const res = await fetch(`${BASE_PATH}/pipelines/${pipelineId}/metrics`);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to get pipeline metrics");
-  }
-  return res.json();
+  return apiFetch(`/pipelines/${pipelineId}/metrics`);
 }
 
 export async function optimizePipeline(pipelineId) {
-  const res = await fetch(`${BASE_PATH}/pipelines/${pipelineId}/optimize`, {
+  return apiFetch(`/pipelines/${pipelineId}/optimize`, {
     method: "POST",
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to optimize pipeline");
-  }
-  return res.json();
 }
 
 export async function getCostAnalysis() {
-  const res = await fetch(`${BASE_PATH}/optimization/cost-analysis`);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to get cost analysis");
-  }
-  return res.json();
+  return apiFetch("/optimization/cost-analysis");
 }
 
-// Cloud Connections API functions
 export async function listConnections() {
-  const res = await fetch(`${BASE_PATH}/connections`);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to list connections");
-  }
-  return res.json();
+  return apiFetch("/connections");
 }
 
 export async function createConnection(connection) {
-  const res = await fetch(`${BASE_PATH}/connections`, {
+  return apiFetch("/connections", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(connection),
+    body: connection,
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to create connection");
-  }
-  return res.json();
+}
+
+export async function listConnectionDatasets(connectionId) {
+  return apiFetch(`/connections/${connectionId}/datasets`);
+}
+
+export async function previewConnectionDataset(connectionId, datasetName, limit = 20) {
+  return apiFetch(
+    `/connections/${connectionId}/datasets/preview?dataset_name=${encodeURIComponent(datasetName)}&limit=${limit}`
+  );
 }
 
 export async function testConnection(connectionId) {
-  const res = await fetch(`${BASE_PATH}/connections/${connectionId}/test`, {
+  const payload = await apiFetch(`/connections/${connectionId}/test`, {
     method: "POST",
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to test connection");
-  }
-  return res.json();
+  return payload.result || payload;
 }
 
 export async function deleteConnection(connectionId) {
-  const res = await fetch(`${BASE_PATH}/connections/${connectionId}`, {
+  return apiFetch(`/connections/${connectionId}`, {
     method: "DELETE",
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Failed to delete connection");
-  }
-  return res.json();
 }
+
 export async function runPipeline(pipelineId, runConfig = {}) {
-  const res = await fetch(`${BASE_PATH}/pipelines/${pipelineId}/runs`, {
+  return apiFetch(`/pipelines/${pipelineId}/runs`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run_config: runConfig }),
+    body: { run_config: runConfig },
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Run pipeline failed");
-  }
-  return res.json();
 }
 
 export async function getRunStatus(runId) {
-  const res = await fetch(`${BASE_PATH}/pipelines/runs/${runId}`);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Get run status failed");
-  }
-  return res.json();
+  return apiFetch(`/pipelines/runs/${runId}`);
 }
 
 export async function getPipeline(pipelineId) {
-  const res = await fetch(`${BASE_PATH}/pipelines/${pipelineId}`);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Get pipeline failed");
-  }
-  return res.json();
+  return apiFetch(`/pipelines/${pipelineId}`);
 }
 
 export async function listShadowRuns(status) {
-  const url = status ? `${BASE_PATH}/shadow?status=${encodeURIComponent(status)}` : `${BASE_PATH}/shadow`;
-  const res = await fetch(url);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "List shadows failed");
-  }
-  return res.json();
+  const url = status ? `/shadow?status=${encodeURIComponent(status)}` : "/shadow";
+  return apiFetch(url);
 }
 
 export async function getShadowRun(shadowId) {
-  const res = await fetch(`${BASE_PATH}/shadow/${shadowId}`);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Get shadow failed");
-  }
-  return res.json();
+  return apiFetch(`/shadow/${shadowId}`);
 }
 
 export async function createShadowRun(input, inputType = "code", threshold) {
   const body = { input_type: inputType, input };
-  if (threshold !== undefined) body.threshold = threshold;
-  const res = await fetch(`${BASE_PATH}/shadow`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Create shadow failed");
+  if (threshold !== undefined) {
+    body.threshold = threshold;
   }
-  return res.json();
+  return apiFetch("/shadow", {
+    method: "POST",
+    body,
+  });
 }
 
 export async function reviewShadow(shadowId, reviewer = "web-ui", action, comment = "") {
-  const res = await fetch(`${BASE_PATH}/shadow/${shadowId}/review`, {
+  return apiFetch(`/shadow/${shadowId}/review`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reviewer, action, comment }),
+    body: { reviewer, action, comment },
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || "Review shadow failed");
-  }
-  return res.json();
 }

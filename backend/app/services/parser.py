@@ -2,11 +2,14 @@ import ast
 import re
 import json
 from uuid import uuid4
-from typing import Dict, Any
+from typing import Any, Dict, List
 
 # Minimal multi-language parser for MVP UIR generation
 # - For Python: use builtin ast to generate a structural AST
 # - For SQL/SAS: do statement-level splitting and token extraction
+
+SQL_FAMILY = {"sql", "sas", "spark_sql", "hive", "impala"}
+PYTHON_FAMILY = {"py", "python", "pyspark"}
 
 
 def _parse_python(code: str) -> Dict[str, Any]:
@@ -20,7 +23,7 @@ def _parse_python(code: str) -> Dict[str, Any]:
 def _parse_sql(code: str) -> Dict[str, Any]:
     # naive SQL statement splitter
     statements = [s.strip() for s in re.split(r";\s*\n|;", code) if s.strip()]
-    tokens = []
+    tokens: List[Dict[str, Any]] = []
     for st in statements:
         parts = re.split(r"\s+", st)
         tokens.append({"statement": st, "tokens": parts[:20]})
@@ -29,7 +32,7 @@ def _parse_sql(code: str) -> Dict[str, Any]:
 
 def parse_to_uir(content: str, language: str | None = None) -> Dict[str, Any]:
     lang = (language or "auto").lower()
-    uir = {
+    uir: Dict[str, Any] = {
         "id": str(uuid4()),
         "language": lang,
         "metadata": {"length": len(content), "lines": content.count("\n") + 1},
@@ -38,7 +41,7 @@ def parse_to_uir(content: str, language: str | None = None) -> Dict[str, Any]:
         "data_access": [],
     }
 
-    if lang in ("py", "python") or (lang == "auto" and content.lstrip().startswith("def ")):
+    if lang in PYTHON_FAMILY or (lang == "auto" and content.lstrip().startswith("def ")):
         parsed = _parse_python(content)
         uir["ast"] = parsed.get("ast")
         # simple symbol extraction (function names)
@@ -50,7 +53,7 @@ def parse_to_uir(content: str, language: str | None = None) -> Dict[str, Any]:
         except Exception:
             pass
 
-    elif lang in ("sql", "sas") or (lang == "auto" and content.strip().upper().startswith(("SELECT", "PROC", "INSERT", "UPDATE"))):
+    elif lang in SQL_FAMILY or (lang == "auto" and content.strip().upper().startswith(("SELECT", "PROC", "INSERT", "UPDATE"))):
         parsed = _parse_sql(content)
         uir["ast"] = json.dumps(parsed)
         for st in parsed.get("statements", []):

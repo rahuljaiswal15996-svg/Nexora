@@ -1,0 +1,76 @@
+import os
+from typing import Any, Dict
+
+from fastapi import Header, HTTPException, Request
+
+
+ROLE_ORDER = {
+    "viewer": 0,
+    "editor": 1,
+    "admin": 2,
+}
+DEFAULT_ROLE = os.getenv("NEXORA_DEFAULT_ROLE", "admin").lower()
+
+
+def normalize_role(role: str | None) -> str:
+    candidate = (role or DEFAULT_ROLE or "viewer").lower()
+    return candidate if candidate in ROLE_ORDER else "viewer"
+
+
+def build_principal(
+    request: Request,
+    x_user_id: str | None = None,
+    x_user_role: str | None = None,
+    x_tenant_id: str | None = None,
+) -> Dict[str, Any]:
+    payload = getattr(request.state, "jwt_payload", None) or {}
+    tenant_id = (
+        x_tenant_id
+        or getattr(request.state, "tenant_id", None)
+        or payload.get("tenant")
+        or payload.get("tenant_id")
+        or payload.get("tid")
+        or "default"
+    )
+    user_id = (
+        payload.get("sub")
+        or getattr(request.state, "user", None)
+        or x_user_id
+        or "dev@local"
+    )
+    role = normalize_role(payload.get("role") or x_user_role)
+
+    principal = {
+        "tenant_id": tenant_id,
+        "user_id": user_id,
+        "role": role,
+    }
+    request.state.principal = principal
+    request.state.user = user_id
+    request.state.tenant_id = tenant_id
+    return principal
+
+
+def require_min_role(min_role: str):
+    minimum = normalize_role(min_role)
+
+    async def dependency(
+        request: Request,
+        x_user_id: str | None = Header(None),
+        x_user_role: str | None = Header(None),
+        x_tenant_id: str | None = Header(None),
+    ) -> Dict[str, Any]:
+        principal = build_principal(request, x_user_id, x_user_role, x_tenant_id)
+        if ROLE_ORDER[principal["role"]] < ROLE_ORDER[minimum]:
+            raise HTTPException(
+                status_code=403,
+                detail=f"{minimum} role required for this action",
+            )
+        return principal
+
+    return dependency
+
+
+require_viewer = require_min_role("viewer")
+require_editor = require_min_role("editor")
+require_admin = require_min_role("admin")

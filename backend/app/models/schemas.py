@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any, Dict, List
 from pydantic import BaseModel
 
 
@@ -17,6 +17,9 @@ class ConversionResponse(BaseModel):
     original: str
     converted: str
     comparison: ComparisonResult
+    source_language: str | None = None
+    target_language: str | None = None
+    meta: Dict[str, Any] | None = None
 
 
 class UploadResponse(BaseModel):

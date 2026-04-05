@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from typing import List, Dict, Any, Optional
+from app.core.authz import require_editor, require_viewer
 from app.services.notebook import NotebookService
 
 router = APIRouter()
@@ -7,13 +8,17 @@ notebook_service = NotebookService()
 
 @router.post("/notebooks")
 async def create_notebook(
-    title: str,
-    x_tenant_id: str | None = Header(None),
-    x_user_id: str | None = Header(None)
-):
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+    principal: Dict[str, Any] = Depends(require_editor),
+) -> Dict[str, Any]:
     """Create a new notebook."""
-    tenant_id = x_tenant_id or "default"
-    user_id = x_user_id or "anonymous"
+    title = (payload.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Notebook title is required")
+
+    tenant_id = str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
+    user_id = str(principal.get("user_id") or "anonymous")
 
     try:
         notebook = notebook_service.create_notebook(title, tenant_id, user_id)
@@ -23,12 +28,13 @@ async def create_notebook(
 
 @router.get("/notebooks")
 async def list_notebooks(
-    x_tenant_id: str | None = Header(None),
-    x_user_id: str | None = Header(None)
+    request: Request,
+    principal: Dict[str, Any] = Depends(require_viewer),
 ) -> List[Dict[str, Any]]:
     """List all notebooks for the tenant/user."""
-    tenant_id = x_tenant_id or "default"
-    user_id = x_user_id
+    tenant_id = str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
+    user_id = principal.get("user_id")
+    user_id = str(user_id) if user_id else None
 
     try:
         notebooks = notebook_service.list_notebooks(tenant_id, user_id)
@@ -39,10 +45,11 @@ async def list_notebooks(
 @router.get("/notebooks/{notebook_id}")
 async def get_notebook(
     notebook_id: str,
-    x_tenant_id: str | None = Header(None)
-):
+    request: Request,
+    principal: Dict[str, Any] = Depends(require_viewer),
+) -> Dict[str, Any]:
     """Get a specific notebook."""
-    tenant_id = x_tenant_id or "default"
+    tenant_id = str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
 
     try:
         notebook = notebook_service.get_notebook(notebook_id, tenant_id)
@@ -58,10 +65,11 @@ async def get_notebook(
 async def update_notebook(
     notebook_id: str,
     updates: Dict[str, Any],
-    x_tenant_id: str | None = Header(None)
-):
+    request: Request,
+    principal: Dict[str, Any] = Depends(require_editor),
+) -> Dict[str, Any]:
     """Update a notebook."""
-    tenant_id = x_tenant_id or "default"
+    tenant_id = str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
 
     try:
         notebook = notebook_service.update_notebook(notebook_id, updates, tenant_id)
@@ -76,10 +84,11 @@ async def update_notebook(
 @router.delete("/notebooks/{notebook_id}")
 async def delete_notebook(
     notebook_id: str,
-    x_tenant_id: str | None = Header(None)
-):
+    request: Request,
+    principal: Dict[str, Any] = Depends(require_editor),
+) -> Dict[str, Any]:
     """Delete a notebook."""
-    tenant_id = x_tenant_id or "default"
+    tenant_id = str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
 
     try:
         deleted = notebook_service.delete_notebook(notebook_id, tenant_id)
@@ -94,13 +103,14 @@ async def delete_notebook(
 @router.post("/notebooks/{notebook_id}/cells")
 async def add_cell(
     notebook_id: str,
+    request: Request,
     cell_type: str = "code",
     content: str = "",
     after_cell_id: Optional[str] = None,
-    x_tenant_id: str | None = Header(None)
-):
+    principal: Dict[str, Any] = Depends(require_editor),
+) -> Dict[str, Any]:
     """Add a new cell to a notebook."""
-    tenant_id = x_tenant_id or "default"
+    tenant_id = str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
 
     try:
         cell = notebook_service.add_cell(notebook_id, cell_type, content, after_cell_id, tenant_id)
@@ -115,10 +125,11 @@ async def update_cell(
     notebook_id: str,
     cell_id: str,
     updates: Dict[str, Any],
-    x_tenant_id: str | None = Header(None)
-):
+    request: Request,
+    principal: Dict[str, Any] = Depends(require_editor),
+) -> Dict[str, Any]:
     """Update a cell in a notebook."""
-    tenant_id = x_tenant_id or "default"
+    tenant_id = str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
 
     try:
         updated = notebook_service.update_cell(notebook_id, cell_id, updates, tenant_id)
@@ -134,10 +145,11 @@ async def update_cell(
 async def delete_cell(
     notebook_id: str,
     cell_id: str,
-    x_tenant_id: str | None = Header(None)
-):
+    request: Request,
+    principal: Dict[str, Any] = Depends(require_editor),
+) -> Dict[str, Any]:
     """Delete a cell from a notebook."""
-    tenant_id = x_tenant_id or "default"
+    tenant_id = str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
 
     try:
         deleted = notebook_service.delete_cell(notebook_id, cell_id, tenant_id)
@@ -153,10 +165,11 @@ async def delete_cell(
 async def execute_cell(
     notebook_id: str,
     cell_id: str,
-    x_tenant_id: str | None = Header(None)
-):
+    request: Request,
+    principal: Dict[str, Any] = Depends(require_editor),
+) -> Dict[str, Any]:
     """Execute a notebook cell."""
-    tenant_id = x_tenant_id or "default"
+    tenant_id = str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
 
     try:
         result = notebook_service.execute_cell(notebook_id, cell_id, tenant_id)

@@ -16,9 +16,10 @@ export default function MonacoEditorWrapper({ value, onChange, language = "sql",
     <div className="border border-surface-hover rounded-lg overflow-hidden">
       <MonacoEditor
         height={height}
-        defaultLanguage={language}
+        language={language}
         value={value}
         onChange={onChange}
+        theme="vs-dark"
         options={options}
         loading={<textarea
           value={value}

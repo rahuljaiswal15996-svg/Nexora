@@ -1,8 +1,11 @@
 import Link from 'next/link';
-// import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
+
+import { ensureDevSession, getWorkspaceSession, updateWorkspaceRole } from '../services/api';
 
 export default function Header() {
-  // const router = useRouter();
+  const [session, setSession] = useState(getWorkspaceSession());
+  const [isUpdatingRole, setIsUpdatingRole] = useState(false);
 
   const navItems = [
     { href: '/', label: 'Home' },
@@ -14,6 +17,37 @@ export default function Header() {
     { href: '/connections', label: 'Connections' },
     { href: '/review', label: 'Review' },
   ];
+
+  useEffect(() => {
+    let mounted = true;
+
+    ensureDevSession()
+      .then((nextSession) => {
+        if (mounted) {
+          setSession(nextSession);
+        }
+      })
+      .catch((error) => {
+        console.error('Unable to initialize session', error);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleRoleChange = async (event) => {
+    const nextRole = event.target.value;
+    setIsUpdatingRole(true);
+    try {
+      const nextSession = await updateWorkspaceRole(nextRole);
+      setSession(nextSession);
+    } catch (error) {
+      console.error('Unable to change workspace role', error);
+    } finally {
+      setIsUpdatingRole(false);
+    }
+  };
 
   return (
     <header className="bg-surface shadow-sm border-b border-surface-hover">
@@ -41,16 +75,27 @@ export default function Header() {
           </nav>
 
           <div className="flex items-center space-x-4">
-            <button className="p-2 text-accent hover:text-primary rounded-lg hover:bg-surface-hover transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.868 12.683A17.925 17.925 0 0112 21c7.962 0 12-1.21 12-2.683m-12 2.683a17.925 17.925 0 01-7.132-8.317M12 21c4.411 0 8-4.03 8-9s-3.589-9-8-9-8 4.03-8 9a9.06 9.06 0 001.832 5.683L4 21l4.868-8.317z" />
-              </svg>
-            </button>
-            <button className="p-2 text-accent hover:text-primary rounded-lg hover:bg-surface-hover transition-colors">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-            </button>
+            <div className="hidden lg:flex items-center gap-3 rounded-lg border border-surface-hover bg-background px-3 py-2">
+              <div className="text-right leading-tight">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-accent/60">Workspace</div>
+                <div className="text-sm font-semibold text-primary">{session.tenant_id}</div>
+              </div>
+              <div className="h-8 w-px bg-surface-hover" />
+              <div className="leading-tight">
+                <div className="text-[10px] uppercase tracking-[0.2em] text-accent/60">Role</div>
+                <select
+                  value={session.role}
+                  onChange={handleRoleChange}
+                  disabled={isUpdatingRole}
+                  className="bg-transparent text-sm font-semibold text-primary outline-none"
+                >
+                  <option value="viewer">Viewer</option>
+                  <option value="editor">Editor</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+            <div className="hidden xl:block text-sm text-accent">{session.user}</div>
           </div>
         </div>
       </div>

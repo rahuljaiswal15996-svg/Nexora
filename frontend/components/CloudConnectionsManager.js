@@ -1,5 +1,13 @@
 import { useState, useEffect } from 'react';
-import { listConnections, createConnection, testConnection, deleteConnection } from '../services/api';
+import DatasetPreview from './DatasetPreview';
+import {
+  listConnections,
+  createConnection,
+  testConnection,
+  deleteConnection,
+  listConnectionDatasets,
+  previewConnectionDataset,
+} from '../services/api';
 
 export default function CloudConnectionsManager() {
   const [connections, setConnections] = useState([]);
@@ -17,6 +25,12 @@ export default function CloudConnectionsManager() {
     }
   });
   const [testingConnection, setTestingConnection] = useState(null);
+  const [selectedConnection, setSelectedConnection] = useState(null);
+  const [datasets, setDatasets] = useState([]);
+  const [selectedDatasetName, setSelectedDatasetName] = useState('');
+  const [datasetPreview, setDatasetPreview] = useState(null);
+  const [loadingDatasets, setLoadingDatasets] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   useEffect(() => {
     loadConnections();
@@ -79,10 +93,56 @@ export default function CloudConnectionsManager() {
 
     try {
       await deleteConnection(connectionId);
+      if (selectedConnection?.id === connectionId) {
+        setSelectedConnection(null);
+        setDatasets([]);
+        setSelectedDatasetName('');
+        setDatasetPreview(null);
+      }
       loadConnections();
     } catch (err) {
       setError('Failed to delete connection');
       console.error(err);
+    }
+  };
+
+  const handleSelectDataset = async (datasetName, connectionId = selectedConnection?.id) => {
+    if (!connectionId) return;
+
+    try {
+      setLoadingPreview(true);
+      setSelectedDatasetName(datasetName);
+      const preview = await previewConnectionDataset(connectionId, datasetName, 20);
+      setDatasetPreview(preview);
+    } catch (err) {
+      setError('Failed to preview dataset');
+      console.error(err);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const handleBrowseData = async (connection) => {
+    try {
+      setError('');
+      setSelectedConnection(connection);
+      setLoadingDatasets(true);
+      setDatasets([]);
+      setDatasetPreview(null);
+      setSelectedDatasetName('');
+
+      const response = await listConnectionDatasets(connection.id);
+      const nextDatasets = response.datasets || [];
+      setDatasets(nextDatasets);
+
+      if (nextDatasets.length > 0) {
+        await handleSelectDataset(nextDatasets[0].name, connection.id);
+      }
+    } catch (err) {
+      setError('Failed to load datasets for this connection');
+      console.error(err);
+    } finally {
+      setLoadingDatasets(false);
     }
   };
 
@@ -290,6 +350,13 @@ export default function CloudConnectionsManager() {
                   </button>
 
                   <button
+                    onClick={() => handleBrowseData(connection)}
+                    className="px-3 py-1 bg-primary text-white rounded text-sm hover:bg-blue-700"
+                  >
+                    Browse Data
+                  </button>
+
+                  <button
                     onClick={() => handleDeleteConnection(connection.id)}
                     className="p-1 text-accent hover:text-red-600 rounded"
                     title="Delete connection"
@@ -317,6 +384,16 @@ export default function CloudConnectionsManager() {
           ))}
         </div>
       </div>
+
+      <DatasetPreview
+        connection={selectedConnection}
+        datasets={datasets}
+        selectedDatasetName={selectedDatasetName}
+        preview={datasetPreview}
+        loadingDatasets={loadingDatasets}
+        loadingPreview={loadingPreview}
+        onSelectDataset={handleSelectDataset}
+      />
     </div>
   );
 }

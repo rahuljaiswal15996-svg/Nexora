@@ -5,10 +5,28 @@ import { convertFile, convertText } from "../services/api";
 import { fetchHistory, clearHistory, loadLocalHistory } from "../services/history";
 
 const initialSample = `PROC SQL\nSELECT * FROM users;`;
+const SOURCE_LANGUAGE_OPTIONS = [
+  { value: "auto", label: "Auto-detect" },
+  { value: "sas", label: "SAS / PROC SQL" },
+  { value: "sql", label: "SQL" },
+  { value: "python", label: "Python" },
+  { value: "r", label: "R" },
+  { value: "spark_sql", label: "Spark SQL" },
+  { value: "scala", label: "Scala" },
+  { value: "shell", label: "Shell" },
+];
+const TARGET_LANGUAGE_OPTIONS = [
+  { value: "python", label: "Python" },
+  { value: "sql", label: "SQL" },
+  { value: "pyspark", label: "PySpark" },
+  { value: "dbt", label: "dbt Model SQL" },
+];
 
 export default function Compare() {
   const [file, setFile] = useState(null);
   const [code, setCode] = useState(initialSample);
+  const [sourceLanguage, setSourceLanguage] = useState("sas");
+  const [targetLanguage, setTargetLanguage] = useState("python");
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -51,7 +69,9 @@ export default function Compare() {
     setLoading(true);
 
     try {
-      const data = file ? await convertFile(file) : await convertText(code);
+      const data = file
+        ? await convertFile(file, { sourceLanguage, targetLanguage })
+        : await convertText(code, { sourceLanguage, targetLanguage });
       setResult(data);
       saveResult(data);
       setHistory(await fetchHistory());
@@ -87,10 +107,36 @@ export default function Compare() {
           <div className="xl:col-span-1 bg-surface shadow-sm rounded-lg p-6 border border-surface-hover">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
+                <label className="block text-sm font-medium text-accent mb-2">Source language</label>
+                <select
+                  value={sourceLanguage}
+                  onChange={(event) => setSourceLanguage(event.target.value)}
+                  className="w-full rounded-lg border border-surface-hover bg-background px-3 py-2 text-accent"
+                >
+                  {SOURCE_LANGUAGE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-accent mb-2">Target language</label>
+                <select
+                  value={targetLanguage}
+                  onChange={(event) => setTargetLanguage(event.target.value)}
+                  className="w-full rounded-lg border border-surface-hover bg-background px-3 py-2 text-accent"
+                >
+                  {TARGET_LANGUAGE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-accent mb-2">Upload code file:</label>
                 <input
                   type="file"
-                  accept=".sql,.txt,.sas,.txt"
+                  accept=".sql,.sas,.py,.r,.scala,.sh,.txt"
                   onChange={(event) => setFile(event.target.files?.[0] || null)}
                   className="block w-full text-sm text-accent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90"
                 />
@@ -156,6 +202,14 @@ export default function Compare() {
             {result ? (
               <section className="bg-surface shadow-sm rounded-lg p-6 border border-surface-hover">
                 <h2 className="text-2xl font-semibold text-primary mb-6">Conversion Result</h2>
+                <div className="mb-4 flex flex-wrap gap-2 text-sm">
+                  <span className="rounded-full bg-primary/10 px-3 py-2 text-primary">
+                    Source: {result.source_language || sourceLanguage}
+                  </span>
+                  <span className="rounded-full bg-green-100 px-3 py-2 text-green-700">
+                    Target: {result.target_language || targetLanguage}
+                  </span>
+                </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
                   <div>
                     <h3 className="text-lg font-medium text-accent mb-2">Original</h3>
