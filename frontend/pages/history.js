@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchHistory, clearHistory } from "../services/history";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 export default function History() {
   const [history, setHistory] = useState([]);
@@ -43,7 +44,7 @@ export default function History() {
         </header>
 
         {loading ? (
-          <div className="text-center text-gray-500">Loading history...</div>
+          <LoadingSpinner message="Loading history..." />
         ) : error ? (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
             {error}

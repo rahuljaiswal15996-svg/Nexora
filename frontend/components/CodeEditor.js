@@ -1,4 +1,6 @@
-export default function CodeEditor({ value, onChange, label, readOnly = false }) {
+import React from 'react';
+
+const CodeEditor = React.memo(({ value, onChange, label, readOnly = false }) => {
   return (
     <div className="mb-4">
       <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
@@ -13,4 +15,8 @@ export default function CodeEditor({ value, onChange, label, readOnly = false })
       />
     </div>
   );
-}
+});
+
+CodeEditor.displayName = 'CodeEditor';
+
+export default CodeEditor;
