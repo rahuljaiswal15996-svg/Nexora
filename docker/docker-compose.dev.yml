@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  backend:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    command: /bin/sh -c "pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  frontend:
+    image: node:18
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: /bin/sh -c "npm install --no-audit --no-fund && npm run dev -- --hostname 0.0.0.0"
+    ports:
+      - "3000:3000"
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nexora
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  minio:
+    image: minio/minio
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "9000:9000"
+
+# Optional (commented) - Kafka for event-driven features
+#  zookeeper:
+#    image: bitnami/zookeeper:latest
+#    environment:
+#      - ALLOW_ANONYMOUS_LOGIN=yes
+#  kafka:
+#    image: bitnami/kafka:latest
+#    environment:
+#      - KAFKA_BROKER_ID=1
+#      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+#      - ALLOW_PLAINTEXT_LISTENER=yes
+
+volumes:
+  postgres_data:

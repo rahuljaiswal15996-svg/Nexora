@@ -1,0 +1,24 @@
+backend:
+  image:
+    repository: nexora/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    port: 8000
+  replicas: 1
+  resources: {}
+
+frontend:
+  image:
+    repository: nexora/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    port: 3000
+  replicas: 1
+  resources: {}
+
+ingress:
+  enabled: false
+  host: nexora.local
+  annotations: {}

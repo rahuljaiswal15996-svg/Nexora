@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#eef2ff"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="#0b1220"/>
+  <rect x="24" y="24" width="1152" height="752" rx="14" fill="#0f1724"/>
+
+  <!-- Header -->
+  <rect x="40" y="40" width="1120" height="84" rx="8" fill="#0b1220"/>
+  <text x="64" y="94" font-size="28" fill="#ffffff" font-family="Arial, Helvetica">NEXORA — Unified Data, AI, and Legacy Modernization Platform</text>
+
+  <!-- Left rail -->
+  <rect x="40" y="140" width="200" height="616" rx="8" fill="#081028" stroke="#1f2937"/>
+  <g fill="#9ca3af" font-family="Arial">
+    <text x="64" y="180" font-size="14">Dashboard</text>
+    <text x="64" y="212" font-size="14">Compare</text>
+    <text x="64" y="244" font-size="14">Pipelines</text>
+    <text x="64" y="276" font-size="14">HITL Review</text>
+    <text x="64" y="308" font-size="14">History</text>
+  </g>
+
+  <!-- Main canvas -->
+  <rect x="256" y="140" width="640" height="616" rx="8" fill="url(#g)" stroke="#e6eef8"/>
+  <g font-family="Arial" fill="#0f1724">
+    <text x="276" y="176" font-size="18" font-weight="700">Code Comparison</text>
+    <rect x="276" y="200" width="300" height="220" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+    <rect x="636" y="200" width="260" height="220" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+    <text x="286" y="224" font-size="12" fill="#374151">Original</text>
+    <text x="646" y="224" font-size="12" fill="#374151">Converted</text>
+    <rect x="276" y="436" width="620" height="280" rx="6" fill="#ffffff" stroke="#e5e7eb"/>
+    <text x="286" y="456" font-size="12" fill="#374151">Diff / Validation</text>
+  </g>
+
+  <!-- Right panel -->
+  <rect x="920" y="140" width="272" height="616" rx="8" fill="#071025" stroke="#1f2937"/>
+  <g fill="#9ca3af" font-family="Arial">
+    <text x="936" y="176" font-size="14">Pipeline Visualizer</text>
+    <rect x="936" y="200" width="208" height="88" rx="6" fill="#071025" stroke="#263244"/>
+    <rect x="936" y="296" width="208" height="88" rx="6" fill="#071025" stroke="#263244"/>
+    <rect x="936" y="392" width="208" height="88" rx="6" fill="#071025" stroke="#263244"/>
+  </g>
+
+  <!-- Footer widgets -->
+  <g font-family="Arial" fill="#cbd5e1">
+    <text x="276" y="730" font-size="12">Notebook previews • Monitoring cards • Recent activity</text>
+  </g>
+</svg>

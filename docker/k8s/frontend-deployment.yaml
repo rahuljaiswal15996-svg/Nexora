@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexora-frontend
+  labels:
+    app: nexora-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexora-frontend
+  template:
+    metadata:
+      labels:
+        app: nexora-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: nexora/frontend:latest # build/push in CI
+          ports:
+            - containerPort: 3000
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nexora-frontend
+spec:
+  selector:
+    app: nexora-frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 3000
+  type: LoadBalancer
