@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Nexora Preview</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f3f4f6; }
+    header { padding: 12px 20px; background: #111827; color: #fff; }
+    .container { display: grid; grid-template-columns: 480px 1fr; gap: 16px; padding: 20px; }
+    .panel { background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); min-height: 640px; overflow: hidden; }
+    .mockup { display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: flex-start; }
+    .mockup img { max-width: 100%; max-height: calc(100vh - 160px); object-fit: contain; border-radius: 6px; background: #fff; }
+    .placeholder { width: 100%; height: 420px; display: flex; align-items: center; justify-content: center; border:1px dashed #d1d5db; color: #6b7280; padding: 12px; border-radius: 6px; background: linear-gradient(180deg,#fff,#f8fafc); }
+    #mockupWrap.dragover { outline: 3px dashed #3b82f6; border-radius: 6px; }
+    iframe { width: 100%; height: calc(100vh - 160px); border: none; border-radius: 6px; }
+    .note { font-size: 0.9rem; color: #4b5563; margin-top: 8px; }
+    .actions { margin-top: 12px; display:flex; gap:8px; }
+    .btn { padding: 8px 10px; background:#2563eb;color:white;border-radius:6px;text-decoration:none; }
+  </style>
+</head>
+<body>
+<header><h2 style="margin:0">Nexora Static Preview</h2></header>
+<div class="container">
+  <div class="panel">
+    <h3 style="margin-top:0">Platform Mockup</h3>
+    <div id="mockupWrap" class="mockup">
+      <img id="mockupImage" src="assets/nexora_overview.svg" alt="Nexora mockup" onerror="document.getElementById('mockupWrap').innerHTML = '<div class=\'placeholder\'>Mockup image not found. Place the image at <strong>docs/assets/nexora_overview.svg</strong> or drop it here.</div>';">
+    </div>
+    <div class="note">Left: visual mockup (place the image at <strong>docs/assets/nexora_overview.svg</strong>).</div>
+    <div class="actions">
+      <a class="btn" href="#" target="_blank" id="openImage">Open image</a>
+      <a class="btn" id="reloadBtn" href="#" onclick="location.reload();return false;">Reload</a>
+    </div>
+  </div>
+  <div class="panel">
+    <h3 style="margin-top:0">Live Review UI</h3>
+    <iframe id="liveFrame" src="http://localhost:3001/review" title="Live Review UI"></iframe>
+    <div class="note">This pane embeds the running Next.js review page. Ensure the frontend dev server is running at <strong>http://localhost:3001</strong>.</div>
+  </div>
+</div>
+<script>
+  (function(){
+    var openBtn = document.getElementById('openImage');
+    var mockupWrap = document.getElementById('mockupWrap');
+
+    function setImageSrc(src){
+      var img = document.getElementById('mockupImage');
+      if (!img) return;
+      img.src = src;
+      if (openBtn) openBtn.href = src;
+    }
+
+    // Initialize open button if image already present
+    var initImg = document.getElementById('mockupImage');
+    if (initImg) {
+      if (openBtn) openBtn.href = initImg.getAttribute('src') || '#';
+      initImg.addEventListener('error', function(){
+        if (mockupWrap) mockupWrap.innerHTML = "<div class='placeholder'>Mockup image not found. Place the image at <strong>docs/assets/nexora_overview.svg</strong> or drop it here.</div>";
+        if (openBtn) openBtn.href = '#';
+      });
+    }
+
+    if (openBtn) {
+      openBtn.addEventListener('click', function(e){
+        var img = document.getElementById('mockupImage');
+        var src = img && img.getAttribute ? img.getAttribute('src') : null;
+        if (src) {
+          this.href = src;
+        } else {
+          e.preventDefault();
+          alert('No image available at docs/assets/nexora_overview.svg');
+        }
+      });
+    }
+
+    // Drag & drop preview (temporary, client-side only)
+    if (mockupWrap) {
+      ['dragenter','dragover'].forEach(function(ev){ mockupWrap.addEventListener(ev,function(e){ e.preventDefault(); mockupWrap.classList.add('dragover'); }, false); });
+      ['dragleave','drop'].forEach(function(ev){ mockupWrap.addEventListener(ev,function(e){ e.preventDefault(); mockupWrap.classList.remove('dragover'); }, false); });
+
+      mockupWrap.addEventListener('drop', function(e){
+        var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+          alert('Please drop an image file (SVG/PNG/JPG).');
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function(ev){ setImageSrc(ev.target.result); };
+        reader.readAsDataURL(file);
+      }, false);
+    }
+  })();
+</script>
+</body>
+</html>
