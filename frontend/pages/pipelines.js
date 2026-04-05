@@ -57,21 +57,21 @@ export default function PipelinesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">Pipelines (MVP)</h1>
-          <p className="text-gray-600">Create a DAG JSON, persist as a pipeline, run and query run status.</p>
-        </header>
+    <div className="bg-secondary min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-primary mb-2">Pipelines</h1>
+          <p className="text-accent">Create and manage DAG-based data pipelines with visual editing and execution.</p>
+        </div>
 
         <div className="bg-white shadow-md rounded-lg p-6 mb-6">
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Pipeline DAG JSON</label>
+            <label className="block text-sm font-medium text-accent mb-2">Pipeline DAG JSON</label>
             <MonacoEditorWrapper value={dagText} onChange={(v) => setDagText(v)} language={"json"} height={220} />
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Visual DAG</label>
+            <label className="block text-sm font-medium text-accent mb-2">Visual DAG</label>
             <DAGEditor dagJson={dagText} onChange={(v) => setDagText(v)} />
           </div>
 

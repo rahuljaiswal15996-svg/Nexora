@@ -65,12 +65,12 @@ export default function ReviewPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans">
-      <div className="max-w-7xl mx-auto p-8">
-        <div className="flex justify-between items-center mb-8 bg-white shadow-md rounded-lg p-6">
+    <div className="bg-secondary min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex justify-between items-center mb-8 bg-white shadow-sm rounded-lg p-6 border border-gray-100">
           <div>
             <h1 className="text-3xl font-bold text-primary mb-2">Human-in-the-Loop Review</h1>
-            <p className="text-gray-600 text-lg">Review AI-generated code conversions requiring manual approval.</p>
+            <p className="text-accent text-lg">Review AI-generated code conversions requiring manual approval.</p>
           </div>
           <button
             onClick={seedDemo}
@@ -90,17 +90,17 @@ export default function ReviewPage() {
         {loading ? (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">⏳</div>
-            <p className="text-xl text-gray-500">Loading shadow runs...</p>
+            <p className="text-xl text-accent/70">Loading shadow runs...</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
             <div className="bg-white shadow-md rounded-lg overflow-hidden">
               <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-semibold text-gray-800">Pending Reviews ({shadows.length})</h2>
+                <h2 className="text-xl font-semibold text-accent">Pending Reviews ({shadows.length})</h2>
               </div>
               <div className="max-h-96 overflow-y-auto p-4">
                 {shadows.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-accent/70">
                     <div className="text-6xl mb-4">📋</div>
                     No pending shadow runs.
                   </div>
@@ -117,8 +117,8 @@ export default function ReviewPage() {
                         }`}
                       >
                         <div className="flex justify-between items-start mb-2">
-                          <div className="font-semibold text-sm text-gray-800">{s.id.slice(0, 8).toUpperCase()}</div>
-                          <div className="text-xs text-gray-500">{new Date(s.created_at).toLocaleString()}</div>
+                          <div className="font-semibold text-sm text-accent">{s.id.slice(0, 8).toUpperCase()}</div>
+                          <div className="text-xs text-accent/70">{new Date(s.created_at).toLocaleString()}</div>
                         </div>
                         <div className="mb-2">
                           <span
@@ -133,7 +133,7 @@ export default function ReviewPage() {
                             {Number(s.confidence).toFixed(3)}
                           </span>
                         </div>
-                        <div className="text-sm text-gray-700 line-clamp-2">
+                        <div className="text-sm text-accent/80 line-clamp-2">
                           {(s.input_blob || "").slice(0, 100)}...
                         </div>
                       </div>
@@ -149,7 +149,7 @@ export default function ReviewPage() {
               ) : (
                 <div className="bg-white shadow-md rounded-lg p-8 text-center border-2 border-dashed border-gray-300">
                   <div className="text-6xl mb-4">👈</div>
-                  <p className="text-lg text-gray-500">Select a shadow run from the list to inspect and review.</p>
+                  <p className="text-lg text-accent/70">Select a shadow run from the list to inspect and review.</p>
                 </div>
               )}
             </div>

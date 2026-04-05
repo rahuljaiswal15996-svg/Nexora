@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import upload, history, status, parse, pipelines, metrics, auth, validate, deploy, agent, shadow
+from app.routes import upload, history, status, parse, pipelines, metrics, auth, validate, deploy, agent, shadow, notebook, optimization, connections
 from app.services.db import init_db
 from app.middleware.auth_middleware import AuthMiddleware
 from app.middleware.tenant_middleware import TenantMiddleware
@@ -39,3 +39,6 @@ app.include_router(validate.router)
 app.include_router(deploy.router)
 app.include_router(agent.router)
 app.include_router(shadow.router)
+app.include_router(notebook.router)
+app.include_router(optimization.router)
+app.include_router(connections.router)

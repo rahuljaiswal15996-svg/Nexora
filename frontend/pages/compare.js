@@ -76,117 +76,125 @@ export default function Compare() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto">
-        <header className="mb-8">
+    <div className="bg-secondary min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
           <h1 className="text-3xl font-bold text-primary mb-2">Compare Code</h1>
-          <p className="text-gray-600">Upload a file or paste code below, then convert and compare the original and transformed output.</p>
-        </header>
+          <p className="text-accent">Upload a file or paste code below, then convert and compare the original and transformed output.</p>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          <div className="bg-white shadow-md rounded-lg p-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
+          <div className="xl:col-span-1 bg-surface shadow-sm rounded-lg p-6 border border-surface-hover">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Upload code file:</label>
+                <label className="block text-sm font-medium text-accent mb-2">Upload code file:</label>
                 <input
                   type="file"
                   accept=".sql,.txt,.sas,.txt"
                   onChange={(event) => setFile(event.target.files?.[0] || null)}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-blue-700"
+                  className="block w-full text-sm text-accent file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-white hover:file:bg-primary/90"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Paste code directly</label>
+                <label className="block text-sm font-medium text-accent mb-2">Paste code directly</label>
                 <textarea
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
                   rows={10}
-                  className="w-full p-4 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full p-4 border border-surface-hover rounded-lg font-mono bg-background text-accent focus:ring-2 focus:ring-primary focus:border-transparent"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 disabled:opacity-50"
               >
                 {loading ? "Converting…" : "Convert & Compare"}
               </button>
 
               {error && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                <div className="bg-danger/10 border border-danger/20 text-danger px-4 py-3 rounded">
                   {error}
                 </div>
               )}
             </form>
+
+            <div className="mt-8">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold text-primary">Conversion History</h2>
+                <button
+                  type="button"
+                  onClick={handleClearHistory}
+                  className="px-4 py-2 bg-surface-hover text-accent rounded-lg hover:bg-surface-hover/80 border border-surface-hover"
+                >
+                  Clear history
+                </button>
+              </div>
+              {history.length === 0 ? (
+                <p className="text-accent/70">No history yet. Convert a file to save history.</p>
+              ) : (
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {history.map((entry) => (
+                    <button
+                      type="button"
+                      key={entry.id}
+                      onClick={() => handleHistoryLoad(entry)}
+                      className="w-full text-left p-4 border border-surface-hover rounded-lg bg-surface hover:bg-surface-hover transition-colors"
+                    >
+                      <div className="font-semibold text-accent">{entry.summary}</div>
+                      <div className="text-sm text-accent/70">{new Date(entry.timestamp).toLocaleString()}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="bg-white shadow-md rounded-lg p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold text-primary">Conversion History</h2>
-              <button
-                type="button"
-                onClick={handleClearHistory}
-                className="px-4 py-2 bg-secondary text-accent rounded-lg hover:bg-gray-200"
-              >
-                Clear history
-              </button>
-            </div>
-            {history.length === 0 ? (
-              <p className="text-gray-500">No history yet. Convert a file to save history.</p>
+          <div className="xl:col-span-2">
+            {result ? (
+              <section className="bg-surface shadow-sm rounded-lg p-6 border border-surface-hover">
+                <h2 className="text-2xl font-semibold text-primary mb-6">Conversion Result</h2>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                  <div>
+                    <h3 className="text-lg font-medium text-accent mb-2">Original</h3>
+                    <CodeEditor value={result.original} label="" readOnly />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium text-accent mb-2">Converted</h3>
+                    <CodeEditor value={result.converted} label="" readOnly />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="bg-background p-4 rounded-lg border border-surface-hover">
+                    <h4 className="text-lg font-medium text-accent mb-3">Metrics</h4>
+                    <ul className="space-y-1 text-sm text-accent/80">
+                      <li>Changed: {result.comparison.changed ? "Yes" : "No"}</li>
+                      <li>Original length: {result.comparison.original_length}</li>
+                      <li>Converted length: {result.comparison.converted_length}</li>
+                      <li>Original lines: {result.comparison.original_line_count}</li>
+                      <li>Converted lines: {result.comparison.converted_line_count}</li>
+                      <li>Similarity ratio: {result.comparison.similarity_ratio}</li>
+                      <li>Diff tokens: {result.comparison.diff_count}</li>
+                    </ul>
+                  </div>
+                  <div className="lg:col-span-2 bg-background p-4 rounded-lg border border-surface-hover">
+                    <h4 className="text-lg font-medium text-accent mb-3">Enhanced Diff Viewer</h4>
+                    <DiffViewer original={result.original} converted={result.converted} />
+                  </div>
+                </div>
+              </section>
             ) : (
-              <div className="space-y-3">
-                {history.map((entry) => (
-                  <button
-                    type="button"
-                    key={entry.id}
-                    onClick={() => handleHistoryLoad(entry)}
-                    className="w-full text-left p-4 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="font-semibold text-gray-800">{entry.summary}</div>
-                    <div className="text-sm text-gray-500">{new Date(entry.timestamp).toLocaleString()}</div>
-                  </button>
-                ))}
+              <div className="bg-surface shadow-sm rounded-lg p-6 text-center border border-surface-hover">
+                <div className="text-6xl mb-4">🔄</div>
+                <h3 className="text-xl font-semibold text-accent mb-2">Ready to Convert</h3>
+                <p className="text-accent/70">Upload a file or paste code on the left, then click "Convert & Compare" to see the results here.</p>
               </div>
             )}
           </div>
         </div>
-
-        {result && (
-          <section className="bg-white shadow-md rounded-lg p-6">
-            <h2 className="text-2xl font-semibold text-primary mb-6">Conversion Result</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-800 mb-2">Original</h3>
-                <CodeEditor value={result.original} label="" readOnly />
-              </div>
-              <div>
-                <h3 className="text-lg font-medium text-gray-800 mb-2">Converted</h3>
-                <CodeEditor value={result.converted} label="" readOnly />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="bg-gray-50 p-4 rounded-lg border">
-                <h4 className="text-lg font-medium text-gray-800 mb-3">Metrics</h4>
-                <ul className="space-y-1 text-sm text-gray-700">
-                  <li>Changed: {result.comparison.changed ? "Yes" : "No"}</li>
-                  <li>Original length: {result.comparison.original_length}</li>
-                  <li>Converted length: {result.comparison.converted_length}</li>
-                  <li>Original lines: {result.comparison.original_line_count}</li>
-                  <li>Converted lines: {result.comparison.converted_line_count}</li>
-                  <li>Similarity ratio: {result.comparison.similarity_ratio}</li>
-                  <li>Diff tokens: {result.comparison.diff_count}</li>
-                </ul>
-              </div>
-              <div className="lg:col-span-2 bg-gray-50 p-4 rounded-lg border">
-                <h4 className="text-lg font-medium text-gray-800 mb-3">Enhanced Diff Viewer</h4>
-                <DiffViewer original={result.original} converted={result.converted} />
-              </div>
-            </div>
-          </section>
-        )}
       </div>
     </div>
   );

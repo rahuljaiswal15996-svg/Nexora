@@ -42,16 +42,16 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">Upload & Parse</h1>
-          <p className="text-gray-600">Upload legacy code files or paste code to parse into the platform UIR.</p>
-        </header>
+    <div className="bg-secondary min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-primary mb-2">Upload & Convert</h1>
+          <p className="text-accent">Upload a code file or paste code to parse and convert it.</p>
+        </div>
 
         <div className="bg-white shadow-md rounded-lg p-6 mb-6">
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Upload file:</label>
+            <label className="block text-sm font-medium text-accent mb-2">Upload file:</label>
             <input
               type="file"
               accept=".sql,.sas,.py,.txt"
@@ -61,7 +61,7 @@ export default function UploadPage() {
           </div>
 
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Paste code</label>
+            <label className="block text-sm font-medium text-accent mb-2">Paste code</label>
             <MonacoEditorWrapper value={code} onChange={(v) => setCode(v)} language={"sql"} height={180} />
           </div>
 

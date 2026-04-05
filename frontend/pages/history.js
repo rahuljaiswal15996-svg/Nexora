@@ -30,18 +30,18 @@ export default function History() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-4xl mx-auto">
-        <header className="mb-8">
+    <div className="bg-secondary min-h-screen">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-8">
           <h1 className="text-3xl font-bold text-primary mb-2">Conversion History</h1>
-          <p className="text-gray-600">Review previous conversions saved by the backend.</p>
+          <p className="text-accent">Review previous conversions saved by the backend.</p>
           <button
             onClick={handleClear}
-            className="mt-4 px-4 py-2 bg-secondary text-accent rounded-lg hover:bg-gray-200"
+            className="mt-4 px-4 py-2 bg-secondary text-accent rounded-lg hover:bg-gray-200 border border-gray-300"
           >
             Clear history
           </button>
-        </header>
+        </div>
 
         {loading ? (
           <LoadingSpinner message="Loading history..." />
@@ -57,24 +57,24 @@ export default function History() {
               <div key={entry.id} className="bg-white shadow-md rounded-lg p-6">
                 <div className="flex justify-between items-start mb-4">
                   <span className="font-semibold text-lg text-gray-800">{entry.filename}</span>
-                  <span className="text-sm text-gray-500">{new Date(entry.timestamp).toLocaleString()}</span>
+                  <span className="text-sm text-accent/70">{new Date(entry.timestamp).toLocaleString()}</span>
                 </div>
-                <div className="mb-4 text-gray-700">{entry.summary}</div>
+                <div className="mb-4 text-accent">{entry.summary}</div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="font-semibold text-gray-800">Similarity</div>
-                    <div className="text-gray-600">{entry.similarity_ratio}</div>
+                  <div className="bg-background p-4 rounded-lg border border-surface-hover">
+                    <div className="font-semibold text-accent">Similarity</div>
+                    <div className="text-accent/70">{entry.similarity_ratio}</div>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="font-semibold text-gray-800">Diff count</div>
-                    <div className="text-gray-600">{entry.diff_count}</div>
+                  <div className="bg-background p-4 rounded-lg border border-surface-hover">
+                    <div className="font-semibold text-accent">Diff count</div>
+                    <div className="text-accent/70">{entry.diff_count}</div>
                   </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="font-semibold text-gray-800">Original length</div>
-                    <div className="text-gray-600">{entry.original_length}</div>
+                  <div className="bg-background p-4 rounded-lg border border-surface-hover">
+                    <div className="font-semibold text-accent">Original length</div>
+                    <div className="text-accent/70">{entry.original_length}</div>
                   </div>
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-accent/70">
                   <div><strong>Original preview:</strong> {entry.original_preview}</div>
                   <div><strong>Converted preview:</strong> {entry.converted_preview}</div>
                 </div>

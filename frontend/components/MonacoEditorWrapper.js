@@ -1,7 +1,7 @@
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
 
-const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false, loading: () => null });
+const MonacoEditor = dynamic(() => import("@monaco-editor/react"), { ssr: false });
 
 export default function MonacoEditorWrapper({ value, onChange, language = "sql", readOnly = false, height = 300 }) {
   const options = useMemo(() => ({
@@ -9,22 +9,25 @@ export default function MonacoEditorWrapper({ value, onChange, language = "sql",
     minimap: { enabled: false },
     fontSize: 14,
     wordWrap: "on",
+    theme: "vs-dark",
   }), [readOnly]);
 
-  if (typeof window === "undefined") {
-    return (
-      <textarea
-        value={value}
-        onChange={(e) => onChange && onChange(e.target.value)}
-        rows={10}
-        className="w-full p-4 border border-gray-300 rounded-lg font-mono focus:ring-2 focus:ring-primary focus:border-transparent"
-      />
-    );
-  }
-
   return (
-    <div className="border border-gray-300 rounded-lg overflow-hidden">
-      <MonacoEditor height={height} defaultLanguage={language} value={value} onChange={onChange} options={options} />
+    <div className="border border-surface-hover rounded-lg overflow-hidden">
+      <MonacoEditor
+        height={height}
+        defaultLanguage={language}
+        value={value}
+        onChange={onChange}
+        options={options}
+        loading={<textarea
+          value={value}
+          onChange={(e) => onChange && onChange(e.target.value)}
+          rows={10}
+          className="w-full p-4 font-mono bg-background text-accent"
+          style={{ height: `${height}px` }}
+        />}
+      />
     </div>
   );
 }
