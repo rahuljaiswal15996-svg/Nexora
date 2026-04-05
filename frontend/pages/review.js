@@ -135,6 +135,6 @@ export default function ReviewPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
