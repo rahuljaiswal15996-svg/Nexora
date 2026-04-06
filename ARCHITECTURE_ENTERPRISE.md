@@ -298,6 +298,60 @@ Authentication: OAuth2 / JWT with tenant claim; support SSO (SAML, OIDC)
 - Add pipeline-run skeleton and worker image
 - Add Dev `docker-compose` for local CI tests
 
+## Enterprise platform capability map
+
+The current platform direction is explicitly aligned to a Dataiku-style operating model. The backend should be treated as a set of tenant-scoped platform objects instead of isolated feature endpoints.
+
+1. User and access layer
+  - Control objects: tenants, users, roles, user_roles, policies, governance_policies, audit_log.
+  - Current implementation: request principal resolution, minimum-role checks, tenant propagation, policy storage, audit trail.
+2. Connections and credential layer
+  - Control objects: connections, credential_vault.
+  - Current implementation: connection CRUD, connection tests, synthetic dataset browsing, schema inspection, preview APIs.
+3. Dataset and catalog layer
+  - Control objects: datasets, dataset_lineage, dataset_quality_checks.
+  - Current implementation: dataset registration, quality checks, lineage edges, project-scoped catalog listing.
+4. Project and workspace layer
+  - Control objects: projects, workspaces, project_members.
+  - Current implementation: project creation, default workspace creation, member assignment, workspace listing.
+5. Flow and scenario layer
+  - Control objects: pipelines, pipeline_runs, scenarios, scenario_versions, scenario_comparisons.
+  - Current implementation: DAG runner plus scenario versioning and side-by-side scenario comparison for design alternatives.
+6. Notebook and code layer
+  - Control objects: notebooks plus cell state.
+  - Current implementation: notebook CRUD and role-aware notebook access.
+7. Transformation and conversion layer
+  - Control objects: uir, conversions, prompt metadata, comparison artifacts.
+  - Current implementation: source-language aware parsing and target-language aware conversion to Python, SQL, PySpark, and dbt.
+8. ML lifecycle layer
+  - Control objects: models, model_versions, experiments, experiment_runs, model_serving, features.
+  - Current implementation: experiment tracking, run metrics, model serving registry scaffolding.
+9. Deployment and runtime layer
+  - Control objects: deployment_targets, deployments, deployment_runs.
+  - Current implementation: deploy target registry, deployment records, run history, deployment cost hooks.
+10. Governance, collaboration, and review layer
+  - Control objects: comments, review_requests, change_log, governance_policies, audit_log.
+  - Current implementation: threaded comments, review requests, review resolution, audit-backed governance actions.
+11. Admin and FinOps layer
+  - Control objects: tenant_quotas, cost_tracking, usage.
+  - Current implementation: quota API, cost summary API, deployment-linked cost records.
+12. Support systems
+  - Required platform services: observability, policy enforcement, queue orchestration, object storage, lakehouse connectors, secrets management, model deployment adapters.
+  - Near-term integration point: connect the new control-plane objects to frontend admin pages and to async runners rather than keeping them as synchronous scaffolding.
+
+## Backend route groups for the enterprise control plane
+
+- `/projects`: project/workspace ownership, membership, and workspace inventory.
+- `/catalog`: dataset registry, lineage, and quality checks.
+- `/scenarios`: scenario definitions, version snapshots, and comparisons.
+- `/deploy` and `/deployments`: deployment targets, deployment records, and runtime history.
+- `/governance`: governance policies and audit log visibility.
+- `/finops`: quotas and tenant cost accounting.
+- `/collaboration`: comments and review request workflows.
+- `/ml`: experiments, experiment runs, and model serving endpoints.
+
+These route groups should remain thin control-plane APIs. Heavy execution should move into workers and data-plane adapters once the UI begins driving these modules end-to-end.
+
 ---
 
 This file will be used as the canonical implementation guide; I'll now add the DB schema into the backend and a parser/UIR skeleton to the codebase for the MVP.

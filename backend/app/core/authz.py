@@ -10,6 +10,7 @@ ROLE_ORDER = {
     "admin": 2,
 }
 DEFAULT_ROLE = os.getenv("NEXORA_DEFAULT_ROLE", "admin").lower()
+Principal = Dict[str, Any]
 
 
 def normalize_role(role: str | None) -> str:
@@ -49,6 +50,14 @@ def build_principal(
     request.state.user = user_id
     request.state.tenant_id = tenant_id
     return principal
+
+
+def principal_tenant(request: Request, principal: Principal) -> str:
+    return str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
+
+
+def principal_user(principal: Principal) -> str:
+    return str(principal.get("user_id") or "dev@local")
 
 
 def require_min_role(min_role: str):

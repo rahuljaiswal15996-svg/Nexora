@@ -85,10 +85,55 @@ WEEK 8: Polish + Deploy (Not started)
 
 ---
 
+ENTERPRISE TRACK: Control Plane Expansion (Current branch)
+- Goal: connect the existing MVP endpoints into a coherent enterprise platform model.
+- Completed on the current feature branch:
+  - Role-aware request handling and tenant-aware frontend session bootstrap
+  - Connection dataset browsing, schema inspection, and preview support
+  - Source-language and target-language aware conversion workflows
+  - New control-plane objects for projects, workspaces, catalog, scenarios, deployments, governance, collaboration, FinOps, and ML lifecycle
+- Backend files added or expanded:
+  - `backend/app/services/db.py`
+  - `backend/app/routes/projects.py`
+  - `backend/app/routes/catalog.py`
+  - `backend/app/routes/scenarios.py`
+  - `backend/app/routes/deploy.py`
+  - `backend/app/routes/governance.py`
+  - `backend/app/routes/finops.py`
+  - `backend/app/routes/collaboration.py`
+  - `backend/app/routes/ml.py`
+- Acceptance for this phase:
+  - New enterprise objects are persisted locally in SQLite
+  - Every new route is tenant-scoped and role-gated
+  - Governance audit records are emitted for mutating platform actions
+
+NEXT PHASE: UX and orchestration integration
+- Goal: expose the new platform objects in the frontend and connect them to async execution.
+- Tasks:
+  - Add project and catalog navigation in the frontend shell
+  - Add scenario comparison and governance dashboards
+  - Add deployment target management UI and deployment timeline views
+  - Connect dataset quality checks, deployment runs, and ML runs to background workers
+- Acceptance:
+  - A tenant can create a project, register datasets, create scenarios, request reviews, deploy a pipeline, and inspect audit/cost history from the UI
+
+Progress update on this phase
+- Completed in the current branch:
+  - `/platform` is now an overview hub rather than the only control-plane surface
+  - Dedicated frontend pages exist for `/projects`, `/catalog`, `/operations`, `/governance`, and `/ml`
+  - Asynchronous platform jobs now back dataset quality checks, deployments, and experiment runs
+  - Tenant-scoped job polling is exposed through `/jobs` and `/jobs/{job_id}`
+- Remaining work:
+  - Replace local background threads with durable workers and a real queue
+  - Add frontend polling polish, filters, and richer progress details
+  - Connect deployments and experiment runs to real executors instead of simulated completion
+
+---
+
 Immediate next actions (today)
-1. Add LLM provider adapter interface + local mock (Week 7)
-2. Add Auth skeleton (OIDC/JWT middleware) and tenant validation (high priority)
-3. Add Helm/K8s skeleton and `docker-compose.dev.yml` for easy demo
+1. Add frontend surfaces for projects, catalog, scenarios, governance, and deployment management
+2. Connect enterprise route groups to background execution instead of synchronous scaffolding
+3. Expand model registry and deployment adapters beyond local simulation
 
 Commands — quick dev
 ```bash
@@ -118,4 +163,4 @@ Repository references
 
 ---
 
-If you confirm, I'll implement the LLM adapter mock, add the auth skeleton, and commit Helm/K8s skeletons next.
+If you confirm, the next implementation slice should move from backend scaffolding into frontend workflows and async orchestration.

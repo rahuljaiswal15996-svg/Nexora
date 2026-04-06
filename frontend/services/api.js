@@ -123,6 +123,19 @@ async function apiFetch(path, options = {}) {
   return response.text();
 }
 
+function withQuery(path, query = {}) {
+  const params = new URLSearchParams();
+
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      params.set(key, value);
+    }
+  });
+
+  const queryString = params.toString();
+  return queryString ? `${path}?${queryString}` : path;
+}
+
 function appendConversionOptions(formData, options = {}) {
   if (options.sourceLanguage) {
     formData.append("source_language", options.sourceLanguage);
@@ -295,4 +308,214 @@ export async function reviewShadow(shadowId, reviewer = "web-ui", action, commen
     method: "POST",
     body: { reviewer, action, comment },
   });
+}
+
+export async function listProjects() {
+  return apiFetch("/projects");
+}
+
+export async function getProject(projectId) {
+  return apiFetch(`/projects/${projectId}`);
+}
+
+export async function createProject(project) {
+  return apiFetch("/projects", {
+    method: "POST",
+    body: project,
+  });
+}
+
+export async function createWorkspace(projectId, workspace) {
+  return apiFetch(`/projects/${projectId}/workspaces`, {
+    method: "POST",
+    body: workspace,
+  });
+}
+
+export async function listCatalogDatasets(query, projectId) {
+  return apiFetch(withQuery("/catalog/datasets", { q: query, project_id: projectId }));
+}
+
+export async function registerDataset(dataset) {
+  return apiFetch("/catalog/datasets", {
+    method: "POST",
+    body: dataset,
+  });
+}
+
+export async function getDataset(datasetId) {
+  return apiFetch(`/catalog/datasets/${datasetId}`);
+}
+
+export async function getDatasetLineage(datasetId) {
+  return apiFetch(`/catalog/datasets/${datasetId}/lineage`);
+}
+
+export async function getDatasetQuality(datasetId) {
+  return apiFetch(`/catalog/datasets/${datasetId}/quality`);
+}
+
+export async function addDatasetQualityCheck(datasetId, payload) {
+  return apiFetch(`/catalog/datasets/${datasetId}/quality-checks`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listScenarios(projectId) {
+  return apiFetch(withQuery("/scenarios", { project_id: projectId }));
+}
+
+export async function getScenario(scenarioId) {
+  return apiFetch(`/scenarios/${scenarioId}`);
+}
+
+export async function createScenario(payload) {
+  return apiFetch("/scenarios", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function createScenarioVersion(scenarioId, payload) {
+  return apiFetch(`/scenarios/${scenarioId}/versions`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function compareScenarioVersions(versionA, versionB) {
+  return apiFetch("/scenarios/compare", {
+    method: "POST",
+    body: { version_a: versionA, version_b: versionB },
+  });
+}
+
+export async function listDeployTargets() {
+  return apiFetch("/deploy/targets");
+}
+
+export async function createDeployTarget(payload) {
+  return apiFetch("/deploy/targets", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listDeployments() {
+  return apiFetch("/deployments");
+}
+
+export async function deployPipelineAsset(payload) {
+  return apiFetch("/deploy", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listGovernancePolicies() {
+  return apiFetch("/governance/policies");
+}
+
+export async function createGovernancePolicy(payload) {
+  return apiFetch("/governance/policies", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listAuditLog(resourceType) {
+  return apiFetch(withQuery("/governance/audit-log", { resource_type: resourceType }));
+}
+
+export async function listQuotas() {
+  return apiFetch("/finops/quotas");
+}
+
+export async function upsertQuota(payload) {
+  return apiFetch("/finops/quotas", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function getTenantCosts(period) {
+  return apiFetch(withQuery("/finops/costs", { period }));
+}
+
+export async function recordTenantCost(payload) {
+  return apiFetch("/finops/costs", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listComments(resourceType, resourceId) {
+  return apiFetch(withQuery("/collaboration/comments", { resource_type: resourceType, resource_id: resourceId }));
+}
+
+export async function createComment(payload) {
+  return apiFetch("/collaboration/comments", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listReviews(resourceType, resourceId) {
+  return apiFetch(withQuery("/collaboration/reviews", { resource_type: resourceType, resource_id: resourceId }));
+}
+
+export async function createReview(payload) {
+  return apiFetch("/collaboration/reviews", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function resolveReview(reviewId, payload) {
+  return apiFetch(`/collaboration/reviews/${reviewId}/resolve`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listExperiments(projectId) {
+  return apiFetch(withQuery("/ml/experiments", { project_id: projectId }));
+}
+
+export async function createExperiment(payload) {
+  return apiFetch("/ml/experiments", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listExperimentRuns(experimentId) {
+  return apiFetch(`/ml/experiments/${experimentId}/runs`);
+}
+
+export async function createExperimentRun(experimentId, payload) {
+  return apiFetch(`/ml/experiments/${experimentId}/runs`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listModelServing() {
+  return apiFetch("/ml/model-serving");
+}
+
+export async function registerModelServing(payload) {
+  return apiFetch("/ml/model-serving", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listJobs(status, jobType) {
+  return apiFetch(withQuery("/jobs", { status, job_type: jobType }));
+}
+
+export async function getJob(jobId) {
+  return apiFetch(`/jobs/${jobId}`);
 }
