@@ -1,7 +1,27 @@
-import json
-from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 from app.services.db import get_connection
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _parse_iso(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _duration_seconds(started_at: Any, finished_at: Any) -> float | None:
+    started = _parse_iso(started_at)
+    finished = _parse_iso(finished_at)
+    if not started or not finished:
+        return None
+    return max(0.0, (finished - started).total_seconds())
 
 class PipelineOptimizerService:
     """Service for pipeline performance optimization and cost analysis."""
@@ -11,51 +31,46 @@ class PipelineOptimizerService:
 
     def get_metrics(self, pipeline_id: str, tenant_id: str = "default") -> Dict[str, Any]:
         """Get performance metrics for a pipeline."""
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        try:
-            # Get pipeline run statistics
-            cursor.execute("""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
                 SELECT
-                    COUNT(*) as total_runs,
-                    AVG(JULIANDAY(finished_at) - JULIANDAY(started_at)) * 24 * 60 * 60 as avg_execution_time,
-                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as success_rate
+                    status,
+                    started_at,
+                    finished_at
                 FROM pipeline_runs
                 WHERE pipeline_id = ? AND tenant_id = ?
                 AND finished_at IS NOT NULL
-                AND started_at > datetime('now', '-30 days')
-            """, (pipeline_id, tenant_id))
+                AND started_at >= ?
+                """,
+                (pipeline_id, tenant_id, cutoff),
+            ).fetchall()
 
-            result = cursor.fetchone()
+        total_runs = len(rows)
+        durations = [duration for duration in (_duration_seconds(row[1], row[2]) for row in rows) if duration is not None]
+        avg_execution_time = sum(durations) / len(durations) if durations else 0.0
+        successful_runs = sum(1 for row in rows if str(row[0] or "").lower() in {"success", "completed"})
+        success_rate = (successful_runs * 100.0 / total_runs) if total_runs else 0.0
+        estimated_cost = avg_execution_time * total_runs * 0.10
 
-            # Calculate estimated monthly cost (simplified)
-            # In a real implementation, this would integrate with cloud provider APIs
-            estimated_cost = 0
-            if result and result[0]:  # total_runs
-                # Rough estimate: $0.10 per minute of execution
-                estimated_cost = (result[1] or 0) * (result[0] or 0) * 0.10
+        metrics: Dict[str, Any] = {
+            "pipeline_id": pipeline_id,
+            "total_runs": total_runs,
+            "avg_execution_time": f"{avg_execution_time:.1f}s" if total_runs else "N/A",
+            "success_rate": f"{success_rate:.1f}" if total_runs else "N/A",
+            "estimated_cost": f"{estimated_cost:.2f}",
+            "last_updated": _now_iso(),
+        }
 
-            metrics = {
-                "pipeline_id": pipeline_id,
-                "total_runs": result[0] if result else 0,
-                "avg_execution_time": f"{result[1]:.1f}s" if result and result[1] else "N/A",
-                "success_rate": f"{result[2]:.1f}" if result and result[2] else "N/A",
-                "estimated_cost": f"{estimated_cost:.2f}",
-                "last_updated": datetime.utcnow().isoformat()
-            }
-
-            return metrics
-
-        finally:
-            conn.close()
+        return metrics
 
     def optimize_pipeline(self, pipeline_id: str, tenant_id: str = "default") -> Dict[str, Any]:
         """Analyze pipeline and provide optimization recommendations."""
         metrics = self.get_metrics(pipeline_id, tenant_id)
 
-        recommendations = []
-        actions = []
+        recommendations: list[Dict[str, Any]] = []
+        actions: list[Dict[str, Any]] = []
 
         # Analyze success rate
         success_rate = float(metrics["success_rate"]) if metrics["success_rate"] != "N/A" else 0
@@ -114,7 +129,7 @@ class PipelineOptimizerService:
 
         return {
             "pipeline_id": pipeline_id,
-            "analysis_date": datetime.utcnow().isoformat(),
+            "analysis_date": _now_iso(),
             "current_metrics": metrics,
             "recommendations": recommendations,
             "actions": actions,
@@ -123,49 +138,65 @@ class PipelineOptimizerService:
 
     def get_cost_analysis(self, tenant_id: str = "default") -> Dict[str, Any]:
         """Get cost analysis across all pipelines."""
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        try:
-            # Get cost breakdown by pipeline
-            cursor.execute("""
+        with get_connection() as conn:
+            rows = conn.execute(
+                """
                 SELECT
                     p.id,
                     p.name,
-                    COUNT(pr.id) as run_count,
-                    AVG(JULIANDAY(pr.finished_at) - JULIANDAY(pr.started_at)) * 24 * 60 * 60 as avg_time
+                    pr.started_at,
+                    pr.finished_at
                 FROM pipelines p
                 LEFT JOIN pipeline_runs pr ON p.id = pr.pipeline_id
                 WHERE p.tenant_id = ?
-                GROUP BY p.id, p.name
-            """, (tenant_id,))
+                ORDER BY p.created_at DESC
+                """,
+                (tenant_id,),
+            ).fetchall()
 
-            pipelines = []
-            total_cost = 0
-
-            for row in cursor.fetchall():
-                pipeline_id, name, run_count, avg_time = row
-                cost = (avg_time or 0) * (run_count or 0) * 0.10  # $0.10 per minute
-                total_cost += cost
-
-                pipelines.append({
+        pipeline_metrics: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            pipeline_id, name, started_at, finished_at = row
+            metrics = pipeline_metrics.setdefault(
+                str(pipeline_id),
+                {
                     "id": pipeline_id,
                     "name": name,
-                    "run_count": run_count,
-                    "avg_execution_time": f"{avg_time:.1f}s" if avg_time else "N/A",
-                    "estimated_cost": f"{cost:.2f}"
-                })
+                    "run_count": 0,
+                    "durations": [],
+                },
+            )
+            duration = _duration_seconds(started_at, finished_at)
+            if duration is not None:
+                metrics["run_count"] += 1
+                metrics["durations"].append(duration)
 
-            return {
-                "tenant_id": tenant_id,
-                "total_monthly_cost": f"{total_cost:.2f}",
-                "pipelines": pipelines,
-                "analysis_period": "30 days",
-                "generated_at": datetime.utcnow().isoformat()
-            }
+        pipelines: list[Dict[str, Any]] = []
+        total_cost = 0.0
+        for metrics in pipeline_metrics.values():
+            run_count_value = int(metrics["run_count"] or 0)
+            durations = metrics["durations"]
+            avg_time_value = sum(durations) / len(durations) if durations else 0.0
+            cost = avg_time_value * run_count_value * 0.10
+            total_cost += cost
 
-        finally:
-            conn.close()
+            pipelines.append(
+                {
+                    "id": metrics["id"],
+                    "name": metrics["name"],
+                    "run_count": run_count_value,
+                    "avg_execution_time": f"{avg_time_value:.1f}s" if avg_time_value else "N/A",
+                    "estimated_cost": f"{cost:.2f}",
+                }
+            )
+
+        return {
+            "tenant_id": tenant_id,
+            "total_monthly_cost": f"{total_cost:.2f}",
+            "pipelines": pipelines,
+            "analysis_period": "30 days",
+            "generated_at": _now_iso(),
+        }
 
     def auto_scale(self, pipeline_id: str, target_metrics: Dict[str, Any], tenant_id: str = "default") -> Dict[str, Any]:
         """Automatically scale pipeline resources based on target metrics."""
@@ -174,7 +205,7 @@ class PipelineOptimizerService:
 
         current_metrics = self.get_metrics(pipeline_id, tenant_id)
 
-        scaling_decisions = []
+        scaling_decisions: list[Dict[str, Any]] = []
 
         # Check if we need to scale based on execution time
         target_exec_time = target_metrics.get("max_execution_time", 300)  # 5 minutes default
@@ -204,7 +235,7 @@ class PipelineOptimizerService:
             "scaling_decisions": scaling_decisions,
             "applied": len(scaling_decisions) > 0,
             "estimated_cost_impact": f"+${len(scaling_decisions) * 50:.2f}/month",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": _now_iso()
         }
 
     def _calculate_optimization_score(self, metrics: Dict[str, Any]) -> float:

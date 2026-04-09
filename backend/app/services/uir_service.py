@@ -1,4 +1,5 @@
-from datetime import datetime
+import json
+from datetime import datetime, timezone
 from typing import Dict, Any
 from uuid import uuid4
 
@@ -6,19 +7,20 @@ from . import db
 
 
 def save_uir(tenant_id: str, uir: Dict[str, Any]) -> Dict[str, Any]:
-    now = datetime.utcnow().isoformat() + "Z"
+    now = datetime.now(timezone.utc).isoformat()
     uid = uir.get("id") or str(uuid4())
     with db.get_connection() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO uir (id, tenant_id, source_filename, language, uir_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                uid,
-                tenant_id,
-                uir.get("source_filename"),
-                uir.get("language"),
-                str(uir),
-                now,
-            ),
+        db.upsert_row(
+            "uir",
+            {
+                "id": uid,
+                "tenant_id": tenant_id,
+                "source_filename": uir.get("source_filename"),
+                "language": uir.get("language"),
+                "uir_json": json.dumps(uir),
+                "created_at": now,
+            },
+            connection=conn,
         )
         conn.commit()
 

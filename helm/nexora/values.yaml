@@ -1,12 +1,116 @@
+nameOverride: ""
+fullnameOverride: ""
+imagePullSecrets: []
+
 backend:
   image:
     repository: nexora/backend
     tag: latest
     pullPolicy: IfNotPresent
   service:
+    type: ClusterIP
     port: 8000
+    annotations: {}
+  replicas: 2
+  env:
+    NEXORA_ENV: development
+    NEXORA_REQUIRE_EXPLICIT_CORS: "false"
+    NEXORA_ALLOWED_ORIGINS: https://nexora.local
+    NEXORA_ALLOWED_ORIGIN_REGEX: ""
+    NEXORA_ALLOW_DEV_TOKENS: "true"
+    NEXORA_JWT_ALGO: HS256
+    NEXORA_JWKS_URL: ""
+    NEXORA_JWKS_AUD: ""
+    NEXORA_DEV_TOKEN_EXP_SECONDS: "86400"
+    NEXORA_DEFAULT_ROLE: admin
+    NEXORA_DEFAULT_TENANT_ID: default
+    NEXORA_DEFAULT_USER_ID: admin@nexora.local
+    NEXORA_LLM_PROVIDER: mock
+    NEXORA_OPENAI_MODEL: gpt-4o-mini
+    NEXORA_WORK_BROKER: redis
+    NEXORA_BROKER_URL: ""
+    NEXORA_BROKER_DB_FALLBACK_ENABLED: "1"
+    NEXORA_BROKER_QUEUE_PREFIX: nexora
+    NEXORA_BROKER_VISIBILITY_TIMEOUT_SECONDS: "30"
+    NEXORA_BROKER_MAINTENANCE_INTERVAL_SECONDS: "10"
+    NEXORA_BROKER_MESSAGE_MAX_RETRIES: "3"
+    NEXORA_BROKER_MESSAGE_TTL_SECONDS: "900"
+    NEXORA_BROKER_REQUEUE_LOOP_THRESHOLD: "2"
+    NEXORA_BROKER_REQUEUE_HISTORY_LIMIT: "6"
+    NEXORA_REMOTE_RUN_LEASE_SECONDS: "90"
+    NEXORA_REMOTE_RUN_MAX_ATTEMPTS: "3"
+    NEXORA_REMOTE_JOB_LEASE_SECONDS: "90"
+    NEXORA_REMOTE_JOB_MAX_ATTEMPTS: "3"
+    NEXORA_PIPELINE_LOG_PAGE_SIZE: "200"
+    NEXORA_HITL_THRESHOLD: "0.85"
+    NEXORA_DB_CONNECT_RETRIES: "10"
+    NEXORA_DB_CONNECT_RETRY_DELAY: "3"
+  secrets:
+    DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/nexora
+    NEXORA_JWT_SECRET: ""
+    OPENAI_API_KEY: ""
+    NEXORA_OPENAI_API_KEY: ""
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  probes:
+    readiness:
+      path: /status
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+    liveness:
+      path: /status
+      initialDelaySeconds: 30
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+
+agent:
+  enabled: true
+  image:
+    repository: nexora/agent
+    tag: latest
+    pullPolicy: IfNotPresent
   replicas: 1
-  resources: {}
+  env:
+    NEXORA_CONTROL_URL: ""
+    NEXORA_WORK_BROKER: redis
+    NEXORA_BROKER_URL: ""
+    NEXORA_AGENT_CONSUMER_MODE: broker
+    NEXORA_AGENT_HEARTBEAT_INTERVAL: "20"
+    POLL_INTERVAL: "2"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  probes:
+    readiness:
+      command:
+        - python
+        - -c
+        - import os, sys, requests; base = os.environ.get("NEXORA_CONTROL_URL", "").rstrip("/"); sys.exit(0 if base and requests.get(f"{base}/status", timeout=5).ok else 1)
+      initialDelaySeconds: 10
+      periodSeconds: 15
+      timeoutSeconds: 5
+      failureThreshold: 6
+    liveness:
+      command:
+        - python
+        - -c
+        - import os, sys, requests; base = os.environ.get("NEXORA_CONTROL_URL", "").rstrip("/"); sys.exit(0 if base and requests.get(f"{base}/status", timeout=5).ok else 1)
+      initialDelaySeconds: 30
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
 
 frontend:
   image:
@@ -14,11 +118,70 @@ frontend:
     tag: latest
     pullPolicy: IfNotPresent
   service:
+    type: ClusterIP
     port: 3000
-  replicas: 1
-  resources: {}
+    annotations: {}
+  replicas: 2
+  env:
+    NEXT_PUBLIC_API_BASE_URL: /api
+    INTERNAL_API_BASE_URL: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  probes:
+    readiness:
+      path: /
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+    liveness:
+      path: /
+      initialDelaySeconds: 30
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 7-alpine
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 6379
+    annotations: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  probes:
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 6
+    liveness:
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 6
 
 ingress:
   enabled: false
+  className: ""
   host: nexora.local
   annotations: {}
+  frontendPath: /
+  frontendPathType: Prefix
+  backendPath: /api
+  backendPathType: Prefix
+  tls: []

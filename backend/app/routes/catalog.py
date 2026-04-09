@@ -94,6 +94,7 @@ async def add_quality_check(
     dataset_id: str,
     request: Request,
     payload: dict = Body(...),
+    run_mode: str | None = Query(None),
     principal: Principal = Depends(require_editor),
 ):
     tenant_id = principal_tenant(request, principal)
@@ -101,6 +102,9 @@ async def add_quality_check(
     check_name = (payload.get("check_name") or "").strip()
     if not check_name:
         raise HTTPException(status_code=400, detail="check_name is required")
+    execution_mode = (run_mode or payload.get("run_mode") or "local").strip().lower()
+    if execution_mode not in {"local", "remote"}:
+        raise HTTPException(status_code=400, detail="run_mode must be 'local' or 'remote'")
     queued = queue_quality_check(
         tenant_id=tenant_id,
         dataset_id=dataset_id,
@@ -109,11 +113,12 @@ async def add_quality_check(
         metrics=payload.get("metrics") or {},
         frequency=(payload.get("frequency") or "manual").strip(),
         final_status=(payload.get("status") or "passed").strip(),
+        run_mode=execution_mode,
     )
     record = queued["quality_check"]
     governance_service.log_action(tenant_id, user_id, "check", "dataset_quality", record["id"], None, record)
     return {
-        "status": "queued",
+        "status": "queued_remote" if execution_mode == "remote" else "queued",
         "job": queued["job"],
         "quality_check": record,
     }

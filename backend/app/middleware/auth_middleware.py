@@ -10,15 +10,21 @@ try:
 except Exception:
     PyJWKClient = None
 
+from app.core.settings import get_jwks_audience, get_jwks_url, get_jwt_algorithm, get_jwt_secret
+
 logger = logging.getLogger("nexora.auth")
 
-# Configuration via env
-DEFAULT_SECRET = os.getenv("NEXORA_JWT_SECRET", "dev-secret")
-DEFAULT_ALGO = os.getenv("NEXORA_JWT_ALGO", "HS256")
-JWKS_URL = os.getenv("NEXORA_JWKS_URL")
-JWKS_AUDIENCE = os.getenv("NEXORA_JWKS_AUD")
-
 _jwk_client = None
+_jwk_client_url = None
+
+
+def _get_jwk_client(jwks_url: str):
+    global _jwk_client
+    global _jwk_client_url
+    if _jwk_client is None or _jwk_client_url != jwks_url:
+        _jwk_client = PyJWKClient(jwks_url)
+        _jwk_client_url = jwks_url
+    return _jwk_client
 
 
 def decode_jwt(token: str):
@@ -26,24 +32,36 @@ def decode_jwt(token: str):
 
     Returns decoded payload dict or None on failure.
     """
+    jwks_url = get_jwks_url()
+    jwks_audience = get_jwks_audience()
     try:
-        if JWKS_URL and PyJWKClient is not None:
+        if jwks_url and PyJWKClient is not None:
             try:
-                global _jwk_client
-                if _jwk_client is None:
-                    _jwk_client = PyJWKClient(JWKS_URL)
-                signing_key = _jwk_client.get_signing_key_from_jwt(token)
+                signing_key = _get_jwk_client(jwks_url).get_signing_key_from_jwt(token)
                 key = signing_key.key
                 alg = signing_key.algorithm or "RS256"
-                options = {"verify_aud": bool(JWKS_AUDIENCE)}
-                payload = jwt.decode(token, key=key, algorithms=[alg], audience=JWKS_AUDIENCE if JWKS_AUDIENCE else None, options=options)
+                options = {"verify_aud": bool(jwks_audience)}
+                payload = jwt.decode(
+                    token,
+                    key=key,
+                    algorithms=[alg],
+                    audience=jwks_audience if jwks_audience else None,
+                    options=options,
+                )
                 return payload
             except Exception as e:
                 logger.debug("JWKS verification failed: %s", e)
                 return None
         else:
-            payload = jwt.decode(token, DEFAULT_SECRET, algorithms=[DEFAULT_ALGO], options={"verify_aud": False})
+            payload = jwt.decode(
+                token,
+                get_jwt_secret(),
+                algorithms=[get_jwt_algorithm()],
+                options={"verify_aud": False},
+            )
             return payload
+    except RuntimeError:
+        raise
     except Exception as e:
         logger.debug("JWT decode failed: %s", e)
         return None

@@ -9,17 +9,17 @@ module.exports = {
     extend: {
       colors: {
         primary: '#0055cc',
-        secondary: '#1a1a1a',
-        accent: '#e5e5e5',
+        secondary: '#0f172a',
+        accent: '#475569',
         success: '#10b981',
         warning: '#f59e0b',
         danger: '#ef4444',
-        background: '#0f0f0f',
-        surface: '#1f1f1f',
-        'surface-hover': '#2a2a2a',
+        background: '#f4efe4',
+        surface: '#ffffff',
+        'surface-hover': '#f8fafc',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Manrope', 'system-ui', '-apple-system', 'sans-serif'],
       },
     },
   },

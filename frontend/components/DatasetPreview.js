@@ -6,6 +6,7 @@ export default function DatasetPreview({
   loadingDatasets,
   loadingPreview,
   onSelectDataset,
+  actions = null,
 }) {
   if (!connection) {
     return null;
@@ -20,8 +21,11 @@ export default function DatasetPreview({
             Preview datasets exposed by {connection.name} in a Dataiku-style tabular workflow.
           </p>
         </div>
-        <div className="rounded-lg bg-background px-3 py-2 text-sm text-accent">
-          Connection type: <span className="font-semibold text-primary">{connection.type}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          {actions}
+          <div className="rounded-lg bg-background px-3 py-2 text-sm text-accent">
+            Connection type: <span className="font-semibold text-primary">{connection.type}</span>
+          </div>
         </div>
       </div>
 

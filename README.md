@@ -1,210 +1,202 @@
-# Nexora MVP
+# Nexora
 
-Enterprise-quality MVP for Nexora with a FastAPI backend, Next.js frontend, backend history persistence, comparison metrics, and Docker scaffolding.
+Nexora is a FastAPI and Next.js control plane for code conversion, notebook and flow authoring, runtime operations, governance, and remote execution. The current deployment path is PostgreSQL plus Alembic for persistence, same-origin `/api` calls from the browser, Docker Compose for local stacks, and Helm plus Terraform for Kubernetes installs.
 
-## Project structure
+## Current stack
 
-```
-nexora/
- ├── backend/
- │   ├── app/
- │   │   ├── core/
- │   │   ├── data/
- │   │   │   ├── nexora.db
- │   │   ├── models/
- │   │   │   ├── schemas.py
- │   │   ├── routes/
- │   │   │   ├── history.py
- │   │   │   ├── status.py
- │   │   │   ├── upload.py
- │   │   ├── services/
- │   │   │   ├── comparison.py
- │   │   │   ├── conversion.py
- │   │   │   ├── history.py
- │   │   ├── main.py
- │   ├── requirements.txt
- ├── frontend/
- │   ├── components/
- │   │   ├── CodeEditor.js
- │   │   ├── DiffViewer.js
- │   ├── pages/
- │   │   ├── index.js
- │   │   ├── compare.js
- │   │   ├── history.js
- │   ├── services/
- │   │   ├── api.js
- │   │   ├── history.js
- │   ├── package.json
- │   ├── next.config.js
- ├── docker/
- │   ├── Dockerfile.backend
- │   ├── Dockerfile.frontend
- │   ├── docker-compose.yml
- ├── README.md
+- Backend: FastAPI app under `backend/app` with tenant-aware routes, pipeline execution, notebook services, governance APIs, and remote-agent endpoints.
+- Frontend: Next.js app under `frontend/` with app workspaces for Migration Studio, Flow Builder, Notebook Workspace, Runtime Ops, Governance, Connections, Catalog, and ML.
+- Persistence: SQLAlchemy-backed database layer in `backend/app/services/db.py` with Alembic migrations in `backend/alembic/`.
+- Database target: PostgreSQL for deployment; if `DATABASE_URL` is not set the backend falls back to a local SQLite file for development.
+- Runtime proxy model: browser traffic uses same-origin `/api`, forwarded by `frontend/pages/api/[...path].js` to the backend.
+- Deployment: Dockerfiles and Compose stacks in `docker/`, Helm chart in `helm/nexora`, and Terraform Helm installation in `infra/terraform`.
+- Remote execution: `agent/agent.py` polls the control plane for `queued_remote` pipeline runs and platform jobs.
+
+## Repository layout
+
+```text
+backend/             FastAPI control plane, services, routes, tests, Alembic
+frontend/            Next.js UI, workspace pages, API proxy route, tests
+agent/               Minimal remote worker for pipeline runs and platform jobs
+docker/              Backend/frontend Dockerfiles and Compose stacks
+helm/nexora/         Kubernetes chart for backend, frontend, config, secret, ingress
+infra/terraform/     Terraform module that installs the Helm chart
+docs/                Product, architecture, deployment, and UX references
 ```
 
-## Backend setup
+## Local development
 
-### Install
+### Backend
 
 ```powershell
 cd backend
 python -m pip install -r requirements.txt
-```
-
-### Run
-
-```powershell
+python -m alembic -c alembic.ini upgrade head
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### Enabling OIDC / JWKS token validation
+Important backend environment variables:
 
-The backend supports validating OIDC tokens using a remote JWKS endpoint. Set the following environment variables to enable:
+- `DATABASE_URL` or `NEXORA_DATABASE_URL`: PostgreSQL for deployment, optional for local fallback to SQLite.
+- `NEXORA_ENV`: deployment mode. Set this to `production` in real deployments so startup validation requires explicit CORS and secure auth configuration.
+- `NEXORA_ALLOWED_ORIGINS`: comma-separated browser origins allowed by CORS. The backend no longer injects implicit localhost origins, so set this explicitly in local, Docker, and ingress-backed environments.
+- `NEXORA_ALLOWED_ORIGIN_REGEX`: optional regex for broader ingress-origin matching when a fixed origin list is not practical. Origins are validated as scheme-plus-host values only, and production startup now fails fast if neither an origin list nor a regex is configured.
+- `NEXORA_REQUIRE_EXPLICIT_CORS`: optional override for explicit-CORS startup validation. Defaults to `true` in production.
+- `NEXORA_JWT_SECRET` or `NEXORA_JWKS_URL` with `NEXORA_JWKS_AUD`: required auth configuration for production. Set a secret for HMAC tokens or configure JWKS for OIDC/JWT validation.
+- `NEXORA_ALLOW_DEV_TOKENS`: developer convenience switch for `POST /auth/token`. It now defaults to `false` in production and should stay disabled outside local development.
+- `NEXORA_DEFAULT_ROLE`, `NEXORA_DEFAULT_TENANT_ID`, and `NEXORA_DEFAULT_USER_ID`: fallback principal values used only when requests do not supply auth context.
+- `NEXORA_LLM_PROVIDER`, `OPENAI_API_KEY` or `NEXORA_OPENAI_API_KEY`, and `NEXORA_OPENAI_MODEL`: conversion-provider settings for mock or OpenAI-backed generation.
 
-- `NEXORA_JWKS_URL` — JWKS endpoint (e.g. https://login.example.com/.well-known/jwks.json)
-- `NEXORA_JWKS_AUD` — optional audience claim to validate
+Backend docs and observability:
 
-If `NEXORA_JWKS_URL` is not set the service falls back to HMAC verification using `NEXORA_JWT_SECRET` (use only for local testing).
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- Metrics: `http://127.0.0.1:8000/metrics`
+- Health: `http://127.0.0.1:8000/status`
 
-
-### Observability
-
-Once the backend is running, Prometheus metrics are exposed at:
-
-```text
-http://127.0.0.1:8000/metrics
-```
-
-Structured logs are configured by default for easier ingestion.
-
-### API docs
-
-Open:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-## Backend API
-
-- `POST /upload` — upload a file and return filename + size
-- `POST /convert` — upload a file, convert code, compute comparison metrics, and persist history
-- `GET /history` — retrieve stored conversion history
-- `DELETE /history` — clear stored conversion history
-- `GET /status` — health check endpoint
- - `POST /convert` — upload a file, convert code, compute comparison metrics, and persist history
- - `GET /history` — retrieve stored conversion history
- - `DELETE /history` — clear stored conversion history
- - `GET /status` — health check endpoint
- - `POST /shadow` — create a shadow execution (compare legacy vs converted outputs and mark for HITL if needed)
- - `GET /shadow` — list shadow runs
- - `GET /shadow/{id}` — fetch shadow run details
- - `POST /shadow/{id}/review` — record HITL review action (approve/reject/needs-fix)
-
-## Frontend setup
-
-### Install
+### Frontend
 
 ```powershell
 cd frontend
-npm install
-```
-
-### Run
-
-```powershell
+npm ci
 npm run dev
 ```
 
-Open:
+Open `http://localhost:3000`.
 
-```text
-http://localhost:3000
+The browser always calls `/api`. In development and production, `frontend/pages/api/[...path].js` forwards that same-origin traffic to the backend using `INTERNAL_API_BASE_URL`. When the Next.js server makes backend requests directly, `INTERNAL_API_BASE_URL` must be set unless `NEXT_PUBLIC_API_BASE_URL` is configured as an absolute URL.
 
-### Pages added (MVP)
+Important frontend environment variables:
 
-- `/upload` — Upload or paste legacy code, parse to UIR, and convert.
-- `/compare` — Compare original vs converted code with enhanced diff viewer.
-- `/history` — View conversion history.
-- `/pipelines` — Create and run DAG pipelines (MVP runner).
+- `NEXT_PUBLIC_API_BASE_URL`: public API base for browser calls. Default is `/api`.
+- `INTERNAL_API_BASE_URL`: backend URL used by the Next.js server runtime and API proxy route.
 
-Note: Frontend proxies `/api/*` to the backend at `http://127.0.0.1:8000/` via `next.config.js`.
+## Docker Compose
+
+Development stack with bind mounts and PostgreSQL:
+
+```powershell
+docker compose -f docker/docker-compose.dev.yml up --build
 ```
 
-## Frontend features
-
-- Upload legacy code files or paste code directly
-- Convert code using the FastAPI backend
-- View original and converted results side by side
-- See similarity metrics and enhanced diff viewer with unified/split views
-- Browse conversion history and clear history from the backend
-
-## Docker support
-
-Run both services with Docker Compose from the `docker/` directory:
+Production-like stack with built images and PostgreSQL:
 
 ```powershell
 docker compose -f docker/docker-compose.yml up --build
 ```
 
-## Developer quick test
+The Compose stacks now follow the same production routing model as Kubernetes:
 
-From the `backend` directory you can run a lightweight smoke test that initializes the DB, parses a sample, converts it, creates a pipeline and runs it:
+- frontend serves the UI on port `3000`
+- backend serves FastAPI on port `8000`
+- browser requests still go to frontend `/api`
+- frontend forwards server-side and proxy traffic to `INTERNAL_API_BASE_URL`
+- `docker-compose.yml` disables dev token issuance by default, while `docker-compose.dev.yml` keeps it enabled for local development.
+
+## Kubernetes deployment
+
+### Helm
 
 ```bash
-cd backend
-python scripts/smoke_test.py
+helm upgrade --install nexora ./helm/nexora \
+	--namespace nexora \
+	--create-namespace \
+	--set backend.image.repository=your-registry/nexora-backend \
+	--set backend.image.tag=2026.04.07 \
+	--set frontend.image.repository=your-registry/nexora-frontend \
+	--set frontend.image.tag=2026.04.07 \
+	--set-string backend.secretEnv.DATABASE_URL=postgresql+psycopg://user:password@postgres:5432/nexora \
+	--set ingress.enabled=true \
+	--set ingress.host=nexora.example.com
 ```
 
-This is useful for local validation of core flows without running the full frontend.
+The chart provisions:
 
-## Run tests
+- backend and frontend Deployments
+- backend and frontend Services
+- backend ConfigMap and Secret
+- frontend ConfigMap with internal backend routing
+- ingress routing `/api` to backend and `/` to frontend
+- readiness and liveness probes plus default resource requests and limits
 
-Run backend integration/unit tests with `pytest` from the repo root:
+### Terraform
+
+```bash
+terraform -chdir=infra/terraform init
+terraform -chdir=infra/terraform plan \
+	-var="database_url=postgresql+psycopg://user:password@postgres:5432/nexora" \
+	-var="backend_image_repository=your-registry/nexora-backend" \
+	-var="backend_image_tag=2026.04.07" \
+	-var="frontend_image_repository=your-registry/nexora-frontend" \
+	-var="frontend_image_tag=2026.04.07" \
+	-var="ingress_enabled=true" \
+	-var="ingress_host=nexora.example.com"
+terraform -chdir=infra/terraform apply \
+	-var="database_url=postgresql+psycopg://user:password@postgres:5432/nexora" \
+	-var="backend_image_repository=your-registry/nexora-backend" \
+	-var="backend_image_tag=2026.04.07" \
+	-var="frontend_image_repository=your-registry/nexora-frontend" \
+	-var="frontend_image_tag=2026.04.07" \
+	-var="ingress_enabled=true" \
+	-var="ingress_host=nexora.example.com"
+```
+
+Terraform now installs the local Helm chart directly instead of serving as a placeholder example.
+
+## Remote agent
+
+The minimal agent is documented in `agent/README.md` and supports:
+
+- `GET /agent/poll` and `POST /agent/report` for remote pipeline runs
+- `/agent/heartbeat` lease renewal for claimed runs
+- `/agent/platform-jobs/poll`, `/agent/platform-jobs/report`, and `/agent/platform-jobs/heartbeat` for remote control-plane jobs
+
+Use a direct backend URL for `NEXORA_CONTROL_URL`. The browser-facing `/api` proxy is for the frontend, not for workers.
+
+## Testing and validation
+
+Backend tests:
 
 ```bash
 python -m pytest -q backend/tests
 ```
 
-Or from the `backend` folder:
+Frontend tests:
 
 ```bash
-cd backend
-pytest -q tests
+cd frontend
+npm test -- --runInBand
 ```
 
-## Execution artifacts and docs
+Backend smoke test:
 
-- Implementation plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
+```bash
+python backend/scripts/smoke_test.py
+```
+
+CI in `.github/workflows/ci.yml` now validates:
+
+- backend dependency install, Alembic migrations, tests, and smoke test
+- frontend install, tests, and production build
+- production Compose boot plus `/status` and `/api/status` checks
+- Helm lint and `helm template`
+- Terraform `fmt`, `init -backend=false`, and `validate`
+- gated image publishing on `main`
+
+## Key docs
+
+- Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md)
+- Enterprise architecture: [ARCHITECTURE_ENTERPRISE.md](ARCHITECTURE_ENTERPRISE.md)
 - API contracts: [API_CONTRACTS.md](API_CONTRACTS.md)
-- Docker dev compose: [docker/docker-compose.dev.yml](docker/docker-compose.dev.yml)
-- K8s skeleton: [docker/k8s/README.md](docker/k8s/README.md)
- - Architecture diagrams: [docs/DIAGRAMS.md](docs/DIAGRAMS.md)
- - UX & Platform overview: [docs/UX_OVERVIEW.md](docs/UX_OVERVIEW.md)
- - Preview: [docs/preview.html](docs/preview.html)
+- Deployment and CI/CD: [docs/Part10_Deployment_CICD.md](docs/Part10_Deployment_CICD.md)
+- Diagrams: [docs/DIAGRAMS.md](docs/DIAGRAMS.md)
+- Helm and Terraform quickstart: [docs/infra/HELM_TERRAFORM.md](docs/infra/HELM_TERRAFORM.md)
+- Terraform module notes: [infra/terraform/README.md](infra/terraform/README.md)
+- UX and platform overview: [docs/UX_OVERVIEW.md](docs/UX_OVERVIEW.md)
 
-## CI / GitHub Actions
+## Current deployment direction
 
-- A CI workflow is provided at `.github/workflows/ci.yml`.
-- It runs the backend smoke test (`backend/scripts/smoke_test.py`) and builds the Next.js frontend on pull requests and pushes.
-- On pushes to `main` it will (optionally) build and push Docker images if `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are configured in repository secrets.
-
-To enable Docker image publishing, set the GitHub repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`.
-
-
-## Next priorities
-
-- Add syntax-aware diff highlighting with unified/split views
-- Add backend database persistence with SQLite storage
-- Add user sessions and multi-tenant workspaces
-- Add pipeline visualization and validation
-
-## Design principles
-
-This MVP follows the correct order:
-1. Backend logic
-2. API routes
-3. Frontend integration
-
-It also includes history persistence, explicit comparison metrics, and a clean UI flow for the core Nexora use case.
+- PostgreSQL is the production database path.
+- Alembic runs before backend startup in containerized environments.
+- Browser API traffic stays same-origin at `/api`.
+- Kubernetes ingress sends `/api` to FastAPI and `/` to Next.js.
+- Terraform and Helm now describe the same runtime model as Docker Compose and CI.

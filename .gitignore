@@ -23,5 +23,19 @@ yarn-error.log*
 .idea/
 .vscode/
 
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.tfstate.lock.info
+*.tfvars
+*.tfvars.json
+*.tfplan
+
 # Editor / assistant metadata
 .claude/

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: nexora
-description: Nexora Helm chart for backend and frontend services
+description: Nexora production deployment chart for backend and frontend services
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"

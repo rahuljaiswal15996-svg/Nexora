@@ -15,11 +15,8 @@ Test Coverage:
 """
 
 import requests
-import json
 import time
-import os
-from typing import Dict, List, Any
-import sys
+from typing import Any, Dict, List, Optional, cast
 
 # Configuration
 BASE_URL = "http://127.0.0.1:8000"
@@ -29,12 +26,18 @@ class NexoraTester:
     def __init__(self):
         self.base_url = BASE_URL
         self.frontend_url = FRONTEND_URL
-        self.test_results = []
-        self.created_resources = []
+        self.test_results: List[Dict[str, Any]] = []
+        self.created_resources: List[Dict[str, str]] = []
+        self.default_headers: Dict[str, str] = {
+            "X-Tenant-Id": "default",
+            "X-User-Id": "comprehensive-tester",
+            "X-User-Role": "admin",
+        }
+        self.auth_token: Optional[str] = None
 
     def log_test(self, test_name: str, status: str, details: str = "", error: str = ""):
         """Log test results"""
-        result = {
+        result: Dict[str, Any] = {
             "test": test_name,
             "status": status,
             "details": details,
@@ -48,26 +51,60 @@ class NexoraTester:
         if error:
             print(f"  Error: {error}")
 
-    def test_api_endpoint(self, method: str, endpoint: str, data: Dict = None,
-                         files: Dict = None, headers: Dict = None) -> Dict:
+    def _error_text(self, result: Dict[str, Any]) -> str:
+        return str(result.get("error") or "Unknown error")
+
+    def _response_as_list(self, result: Dict[str, Any]) -> List[Dict[str, Any]]:
+        response = result.get("response")
+        if isinstance(response, list):
+            items: List[Dict[str, Any]] = []
+            for item in cast(List[Any], response):
+                if isinstance(item, dict):
+                    items.append(cast(Dict[str, Any], item))
+            return items
+        return []
+
+    def _notebook_payload(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        response = result.get("response")
+        if not isinstance(response, dict):
+            return {}
+        response_dict = cast(Dict[str, Any], response)
+        notebook = response_dict.get("notebook")
+        if not isinstance(notebook, dict):
+            return {}
+        return cast(Dict[str, Any], notebook)
+
+    def test_api_endpoint(
+        self,
+        method: str,
+        endpoint: str,
+        data: Optional[Dict[str, Any]] = None,
+        files: Optional[Dict[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
         """Test an API endpoint"""
         url = f"{self.base_url}{endpoint}"
+        request_headers = {**self.default_headers}
+        if self.auth_token:
+            request_headers["Authorization"] = f"Bearer {self.auth_token}"
+        if headers:
+            request_headers.update(headers)
         try:
             if method.upper() == "GET":
-                response = requests.get(url, headers=headers)
+                response = requests.get(url, headers=request_headers, timeout=20)
             elif method.upper() == "POST":
                 if files:
-                    response = requests.post(url, files=files, headers=headers)
+                    response = requests.post(url, data=data, files=files, headers=request_headers, timeout=20)
                 else:
-                    response = requests.post(url, json=data, headers=headers)
+                    response = requests.post(url, json=data, headers=request_headers, timeout=20)
             elif method.upper() == "PUT":
-                response = requests.put(url, json=data, headers=headers)
+                response = requests.put(url, json=data, headers=request_headers, timeout=20)
             else:
                 raise ValueError(f"Unsupported method: {method}")
 
             return {
                 "status_code": response.status_code,
-                "response": response.json() if response.headers.get('content-type') == 'application/json' else response.text,
+                "response": response.json() if 'application/json' in response.headers.get('content-type', '') else response.text,
                 "headers": dict(response.headers),
                 "success": response.status_code < 400
             }
@@ -116,7 +153,7 @@ class NexoraTester:
 
         # Test 1: Create pipeline
         self.log_test("Create Pipeline", "running")
-        pipeline_dag = {
+        pipeline_dag: Dict[str, Any] = {
             "nodes": [
                 {"id": "1", "type": "input", "data": {"label": "Input"}},
                 {"id": "2", "type": "transform", "data": {"label": "Transform"}},
@@ -140,7 +177,7 @@ class NexoraTester:
             if result["success"]:
                 self.log_test("Get Pipeline", "passed", f"Retrieved pipeline: {result['response'].get('name')}")
             else:
-                self.log_test("Get Pipeline", "failed", error=result.get("error"))
+                self.log_test("Get Pipeline", "failed", error=self._error_text(result))
 
             # Test 3: Start pipeline run
             self.log_test("Start Pipeline Run", "running")
@@ -157,11 +194,11 @@ class NexoraTester:
                 if result["success"]:
                     self.log_test("Get Run Status", "passed", f"Status: {result['response'].get('status')}")
                 else:
-                    self.log_test("Get Run Status", "failed", error=result.get("error"))
+                    self.log_test("Get Run Status", "failed", error=self._error_text(result))
             else:
-                self.log_test("Start Pipeline Run", "failed", error=result.get("error"))
+                self.log_test("Start Pipeline Run", "failed", error=self._error_text(result))
         else:
-            self.log_test("Create Pipeline", "failed", error=result.get("error"))
+            self.log_test("Create Pipeline", "failed", error=self._error_text(result))
 
     def test_notebook_operations(self):
         """Test notebook CRUD operations"""
@@ -171,37 +208,108 @@ class NexoraTester:
         self.log_test("Create Notebook", "running")
         result = self.test_api_endpoint("POST", "/notebooks", data={"title": "Test Notebook"})
         if result["success"]:
-            notebook_id = result["response"].get("id")
+            notebook_payload = self._notebook_payload(result)
+            notebook_id = notebook_payload.get("id")
             self.log_test("Create Notebook", "passed", f"Notebook ID: {notebook_id}")
-            self.created_resources.append({"type": "notebook", "id": notebook_id})
+            if notebook_id:
+                self.created_resources.append({"type": "notebook", "id": str(notebook_id)})
 
             # Test 2: List notebooks
             self.log_test("List Notebooks", "running")
             result = self.test_api_endpoint("GET", "/notebooks")
             if result["success"]:
-                notebooks = result["response"] if isinstance(result["response"], list) else []
+                notebooks = self._response_as_list(result)
                 self.log_test("List Notebooks", "passed", f"Found {len(notebooks)} notebooks")
             else:
-                self.log_test("List Notebooks", "failed", error=result.get("error"))
+                self.log_test("List Notebooks", "failed", error=self._error_text(result))
 
             # Test 3: Get notebook
             self.log_test("Get Notebook", "running")
             result = self.test_api_endpoint("GET", f"/notebooks/{notebook_id}")
             if result["success"]:
-                self.log_test("Get Notebook", "passed", f"Title: {result['response'].get('title')}")
+                notebook_detail = cast(Dict[str, Any], result["response"])
+                self.log_test("Get Notebook", "passed", f"Title: {notebook_detail.get('title')}")
             else:
-                self.log_test("Get Notebook", "failed", error=result.get("error"))
+                self.log_test("Get Notebook", "failed", error=self._error_text(result))
+                notebook_detail = {}
 
             # Test 4: Update notebook
             self.log_test("Update Notebook", "running")
             result = self.test_api_endpoint("PUT", f"/notebooks/{notebook_id}",
-                                          data={"title": "Updated Test Notebook", "content": "print('hello')"})
+                                          data={"title": "Updated Test Notebook", "metadata": {"runtime_defaults": {"target": "local", "profile": "local"}}})
             if result["success"]:
                 self.log_test("Update Notebook", "passed", "Notebook updated successfully")
             else:
-                self.log_test("Update Notebook", "failed", error=result.get("error"))
+                self.log_test("Update Notebook", "failed", error=self._error_text(result))
+
+            code_cell_id = ""
+            for cell in cast(List[Any], notebook_detail.get("cells") or []):
+                if isinstance(cell, dict):
+                    notebook_cell = cast(Dict[str, Any], cell)
+                    if notebook_cell.get("type") != "code":
+                        continue
+                    code_cell_id = str(notebook_cell.get("id") or "")
+                    break
+
+            if code_cell_id:
+                self.log_test("Update Notebook Cell", "running")
+                result = self.test_api_endpoint(
+                    "PUT",
+                    f"/notebooks/{notebook_id}/cells/{code_cell_id}",
+                    data={"content": "1 + 1", "metadata": {"language": "python"}},
+                )
+                if result["success"]:
+                    self.log_test("Update Notebook Cell", "passed", f"Updated code cell: {code_cell_id}")
+                else:
+                    self.log_test("Update Notebook Cell", "failed", error=self._error_text(result))
+
+                self.log_test("Execute Notebook Cell", "running")
+                result = self.test_api_endpoint(
+                    "POST",
+                    f"/notebooks/{notebook_id}/executions",
+                    data={"mode": "cell", "cell_id": code_cell_id, "runtime_target": "local"},
+                )
+                if result["success"]:
+                    response = cast(Dict[str, Any], result["response"])
+                    execution_notebook = cast(Dict[str, Any], response.get("notebook") or {})
+                    execution_cells: Dict[str, Dict[str, Any]] = {}
+                    for item in cast(List[Any], execution_notebook.get("cells") or []):
+                        if not isinstance(item, dict):
+                            continue
+                        cell_payload = cast(Dict[str, Any], item)
+                        execution_cells[str(cell_payload.get("id") or "")] = cell_payload
+                    executed_cell = execution_cells.get(code_cell_id, {})
+                    outputs = cast(List[Any], executed_cell.get("outputs") or [])
+                    run_id = str(response.get("run_id") or "")
+                    self.log_test(
+                        "Execute Notebook Cell",
+                        "passed",
+                        f"Run ID: {run_id or 'n/a'} · Execution count: {executed_cell.get('execution_count')} · Outputs: {len(outputs)}",
+                    )
+
+                    if run_id:
+                        self.log_test("Get Notebook Execution Run Status", "running")
+                        terminal_status = "queued"
+                        for _ in range(40):
+                            run_result = self.test_api_endpoint("GET", f"/pipelines/runs/{run_id}")
+                            if not run_result["success"]:
+                                break
+                            run_payload = cast(Dict[str, Any], run_result.get("response") or {})
+                            terminal_status = str(run_payload.get("status") or "unknown")
+                            if terminal_status not in {"queued", "running", "queued_remote", "running_remote"}:
+                                break
+                            time.sleep(0.2)
+
+                        if terminal_status == "success":
+                            self.log_test("Get Notebook Execution Run Status", "passed", f"Status: {terminal_status}")
+                        else:
+                            self.log_test("Get Notebook Execution Run Status", "failed", error=f"Unexpected notebook run status: {terminal_status}")
+                else:
+                    self.log_test("Execute Notebook Cell", "failed", error=self._error_text(result))
+            else:
+                self.log_test("Execute Notebook Cell", "failed", error="Created notebook did not include a code cell to execute")
         else:
-            self.log_test("Create Notebook", "failed", error=result.get("error"))
+            self.log_test("Create Notebook", "failed", error=self._error_text(result))
 
     def test_history_operations(self):
         """Test history tracking"""
@@ -211,10 +319,10 @@ class NexoraTester:
         self.log_test("Get History", "running")
         result = self.test_api_endpoint("GET", "/history")
         if result["success"]:
-            history_items = result["response"] if isinstance(result["response"], list) else []
+            history_items = self._response_as_list(result)
             self.log_test("Get History", "passed", f"Found {len(history_items)} history items")
         else:
-            self.log_test("Get History", "failed", error=result.get("error"))
+            self.log_test("Get History", "failed", error=self._error_text(result))
 
     def test_frontend_pages(self):
         """Test frontend page accessibility"""
@@ -222,7 +330,14 @@ class NexoraTester:
 
         pages = [
             "/",
+            "/home",
+            "/migration-studio",
+            "/flow",
             "/notebooks",
+            "/catalog",
+            "/runtime",
+            "/connections",
+            "/governance/policies",
             "/pipelines",
             "/upload",
             "/history",
@@ -246,25 +361,33 @@ class NexoraTester:
         print("\n=== UI BUTTON FUNCTIONALITY MAPPING ===")
 
         ui_components = {
-            "Home Page Buttons": {
-                "Notebooks": "GET /notebooks - Navigate to notebook management page",
-                "Pipelines": "GET /pipelines - Navigate to pipeline creation page",
-                "Connections": "GET /connections - Navigate to data connections page"
+            "Home Summary": {
+                "Start Modernization Batch": "GET /migration-studio - Open the migration intake workspace",
+                "Open Flow Builder": "GET /flow - Continue production graph authoring",
+                "Launch Jupyter Workspace": "GET /notebooks?mode=new - Open a new notebook-first workbench",
+                "Open Runtime Ops": "GET /runtime - Inspect jobs, runs, agents, and deployments"
             },
-            "Upload Page": {
+            "Migration Studio": {
                 "Upload File": "POST /upload - Upload file for processing",
                 "Convert": "POST /convert - Convert code using AI engine",
                 "Parse": "POST /parse - Parse code to UIR format"
             },
-            "Pipeline Page": {
-                "Create Pipeline": "POST /pipelines - Create new pipeline with DAG",
-                "Run Pipeline": "POST /pipelines/{id}/runs - Execute pipeline",
-                "Save Pipeline": "PUT /pipelines/{id} - Update pipeline configuration"
+            "Flow Builder": {
+                "Validate Graph": "POST /pipelines/validate - Validate the current authoring DAG",
+                "Run Flow": "POST /pipelines/{id}/runs - Execute the saved production flow",
+                "Save Flow Draft": "PUT /pipelines/{id} - Persist the current flow graph",
+                "Open Jupyter Workspace": "GET /notebooks?node={node_id}&pipeline={pipeline_id} - Open node-linked notebook context"
             },
-            "Notebook Page": {
+            "Notebook Workspace": {
                 "Create Notebook": "POST /notebooks - Create new notebook",
-                "Execute Cell": "POST /notebooks/{id}/execute - Run notebook cell",
-                "Save Notebook": "PUT /notebooks/{id} - Save notebook changes"
+                "Run Cell": "POST /notebooks/{id}/executions - Run the selected notebook cell through the shared pipeline runtime",
+                "Run All": "POST /notebooks/{id}/executions - Run the active notebook through the shared pipeline runtime",
+                "Save Notebook": "PUT /notebooks/{id} - Save notebook changes",
+                "Attach To Flow": "POST /notebooks/{id}/flow-binding - Persist notebook-to-flow linkage"
+            },
+            "Runtime Ops": {
+                "Retry Job": "POST /jobs/{id}/retry - Requeue terminal control-plane work",
+                "Rollback Deployment": "POST /deployments/{id}/rollback - Queue a rollback job for a deployment"
             }
         }
 
@@ -277,51 +400,62 @@ class NexoraTester:
         """Test all API endpoints comprehensively"""
         print("\n=== COMPREHENSIVE API ENDPOINT TESTING ===")
 
-        endpoints = [
-            # Core endpoints
-            ("GET", "/status", "System status check"),
-            ("GET", "/metrics", "System metrics"),
-            ("GET", "/history", "Conversion history"),
-
-            # Auth endpoints
-            ("POST", "/auth/login", "User authentication"),
-            ("POST", "/auth/register", "User registration"),
-
-            # Validation endpoints
-            ("POST", "/validate", "Code validation"),
-
-            # Deployment endpoints
-            ("POST", "/deploy", "Code deployment"),
-
-            # Agent endpoints
-            ("POST", "/agent/execute", "AI agent execution"),
-
-            # Shadow testing
-            ("POST", "/shadow/compare", "Shadow mode comparison"),
-
-            # Connections
-            ("GET", "/connections", "List data connections"),
-            ("POST", "/connections", "Create data connection"),
+        endpoints: List[Dict[str, Any]] = [
+            {"method": "GET", "endpoint": "/status", "description": "System status check", "expected_statuses": [200]},
+            {"method": "GET", "endpoint": "/metrics", "description": "System metrics", "expected_statuses": [200]},
+            {"method": "GET", "endpoint": "/history", "description": "Conversion history", "expected_statuses": [200]},
+            {
+                "method": "POST",
+                "endpoint": "/auth/token",
+                "description": "Development auth token issuance",
+                "data": {"tenant_id": "default", "user": "comprehensive@test.local", "role": "admin"},
+                "expected_statuses": [200],
+            },
+            {"method": "GET", "endpoint": "/projects", "description": "Project portfolio", "expected_statuses": [200]},
+            {"method": "GET", "endpoint": "/catalog/datasets", "description": "Catalog dataset inventory", "expected_statuses": [200]},
+            {"method": "GET", "endpoint": "/jobs", "description": "Runtime job queue", "expected_statuses": [200]},
+            {"method": "POST", "endpoint": "/validate", "description": "Code validation", "expect_validation_error": True},
+            {"method": "POST", "endpoint": "/deploy", "description": "Code deployment", "expect_validation_error": True},
+            {"method": "GET", "endpoint": "/shadow", "description": "Shadow run inventory", "expected_statuses": [200]},
+            {
+                "method": "POST",
+                "endpoint": "/shadow",
+                "description": "Create shadow comparison run",
+                "data": {"input_type": "code", "input": "SELECT 1;", "threshold": 0.8},
+                "expected_statuses": [200],
+            },
+            {"method": "GET", "endpoint": "/connections", "description": "List data connections", "expected_statuses": [200]},
+            {"method": "POST", "endpoint": "/connections", "description": "Create data connection", "expect_validation_error": True},
         ]
 
-        for method, endpoint, description in endpoints:
+        for spec in endpoints:
+            method = str(spec["method"])
+            endpoint = str(spec["endpoint"])
+            description = str(spec["description"])
             self.log_test(f"{method} {endpoint}", "running", description)
-            result = self.test_api_endpoint(method, endpoint)
+            result = self.test_api_endpoint(
+                method,
+                endpoint,
+                data=cast(Optional[Dict[str, Any]], spec.get("data")),
+                files=cast(Optional[Dict[str, Any]], spec.get("files")),
+                headers=cast(Optional[Dict[str, str]], spec.get("headers")),
+            )
+            expected_statuses = cast(List[int], spec.get("expected_statuses") or [])
+            expect_validation_error = bool(spec.get("expect_validation_error"))
 
-            if method == "GET" and endpoint in ["/status", "/metrics", "/history", "/connections"]:
-                # These should return data or empty arrays
-                if result["success"] or result["status_code"] in [200, 404]:
-                    self.log_test(f"{method} {endpoint}", "passed", f"Status: {result['status_code']}")
-                else:
-                    self.log_test(f"{method} {endpoint}", "failed", f"Status: {result['status_code']}", result.get("error"))
+            if result["status_code"] in expected_statuses:
+                if endpoint == "/auth/token" and isinstance(result.get("response"), dict):
+                    auth_response = cast(Dict[str, Any], result["response"])
+                    access_token = auth_response.get("access_token")
+                    if isinstance(access_token, str) and access_token:
+                        self.auth_token = access_token
+                self.log_test(f"{method} {endpoint}", "passed", f"Status: {result['status_code']}")
+            elif expect_validation_error and result["status_code"] in [400, 422] and "detail" in str(result.get("response", "")):
+                self.log_test(f"{method} {endpoint}", "passed", "Expected validation error for missing data")
+            elif result["success"]:
+                self.log_test(f"{method} {endpoint}", "passed", f"Status: {result['status_code']}")
             else:
-                # POST endpoints might require specific data
-                if result["status_code"] in [400, 422, 500] and "detail" in str(result.get("response", "")):
-                    self.log_test(f"{method} {endpoint}", "passed", "Expected validation error for missing data")
-                elif result["success"]:
-                    self.log_test(f"{method} {endpoint}", "passed", f"Status: {result['status_code']}")
-                else:
-                    self.log_test(f"{method} {endpoint}", "warning", f"Status: {result['status_code']} - May require authentication/data")
+                self.log_test(f"{method} {endpoint}", "failed", f"Status: {result['status_code']}", self._error_text(result))
 
     def generate_test_report(self):
         """Generate comprehensive test report"""
@@ -329,25 +463,33 @@ class NexoraTester:
         print("NEXORA COMPREHENSIVE TEST REPORT")
         print("="*80)
 
-        passed = len([r for r in self.test_results if r["status"] == "passed"])
-        failed = len([r for r in self.test_results if r["status"] == "failed"])
-        warning = len([r for r in self.test_results if r["status"] == "warning"])
-        total = len(self.test_results)
+        terminal_results = [r for r in self.test_results if r["status"] in {"passed", "failed", "warning"}]
+        info_results = [r for r in self.test_results if r["status"] == "info"]
+        passed = len([r for r in terminal_results if r["status"] == "passed"])
+        failed = len([r for r in terminal_results if r["status"] == "failed"])
+        warning = len([r for r in terminal_results if r["status"] == "warning"])
+        total = len(terminal_results)
+        success_rate = (passed / total * 100) if total else 0.0
 
         print(f"\nTest Summary:")
         print(f"  Total Tests: {total}")
         print(f"  Passed: {passed}")
         print(f"  Failed: {failed}")
         print(f"  Warnings: {warning}")
-        print(f"  Success Rate: {passed/total*100:.1f}%")
+        print(f"  Success Rate: {success_rate:.1f}%")
         print("\nDetailed Results:")
-        for result in self.test_results:
+        for result in terminal_results:
             status_icon = "✓" if result["status"] == "passed" else "✗" if result["status"] == "failed" else "⚠"
             print(f"  {status_icon} {result['test']}: {result['status'].upper()}")
             if result.get("details"):
                 print(f"    Details: {result['details']}")
             if result.get("error"):
                 print(f"    Error: {result['error']}")
+
+        if info_results:
+            print("\nSupplemental Info:")
+            for result in info_results:
+                print(f"  • {result['test']}: {result.get('details', '')}")
 
         print(f"\nCreated Resources:")
         for resource in self.created_resources:
@@ -391,17 +533,17 @@ class NexoraTester:
         print("    - Returns execution status and results")
 
         print(f"\nNotebook Operations:")
-        print("  • CRUD operations for interactive code execution")
-        print("  • Cell-by-cell execution support")
-        print("  • Real-time collaboration features")
+        print("  • CRUD operations for interactive notebook authoring")
+        print("  • Shared notebook execution support through POST /notebooks/{id}/executions")
+        print("  • Flow attachment support through POST /notebooks/{id}/flow-binding")
 
         print(f"\nUI Button Functionality:")
-        print("  • Upload Button: Triggers file selection dialog")
-        print("  • Convert Button: Sends POST /convert request")
-        print("  • Parse Button: Sends POST /parse request")
-        print("  • Create Pipeline Button: Opens DAG editor")
-        print("  • Run Pipeline Button: Executes pipeline workflow")
-        print("  • Save Notebook Button: Persists notebook changes")
+        print("  • Start Modernization Batch: Opens Migration Studio")
+        print("  • Open Flow Builder: Opens the execution-aware DAG workspace")
+        print("  • Launch Jupyter Workspace: Opens a new notebook-first workbench")
+        print("  • Validate Graph: Sends POST /pipelines/validate")
+        print("  • Run Flow: Executes the saved production flow")
+        print("  • Run Cell / Run All: Sends POST /notebooks/{id}/executions")
 
     def run_all_tests(self):
         """Run all test suites"""

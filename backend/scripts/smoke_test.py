@@ -1,6 +1,7 @@
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -30,7 +31,47 @@ def main():
     print("Conversion similarity:", result.get("comparison", {}).get("similarity_ratio"))
 
     print("Creating pipeline...")
-    dag = {"nodes": [{"id": "n1", "type": "task", "simulate_seconds": 0.1}, {"id": "n2", "type": "task", "simulate_seconds": 0.1}]}
+    dag: dict[str, list[dict[str, Any]]] = {
+        "nodes": [
+            {
+                "id": "seed_orders",
+                "kind": "recipe",
+                "label": "Seed Orders",
+                "config": {
+                    "language": "python",
+                    "runtime_profile": "python-batch",
+                    "expression": "[{\"order_id\": \"A1\", \"amount\": 10}, {\"order_id\": \"A2\", \"amount\": 15}]",
+                    "output_dataset_name": "orders_seed",
+                },
+            },
+            {
+                "id": "normalize_orders",
+                "kind": "recipe",
+                "label": "Normalize Orders",
+                "config": {
+                    "language": "sql",
+                    "runtime_profile": "warehouse-sql",
+                    "expression": "SELECT order_id, amount FROM input_dataset ORDER BY order_id",
+                    "output_dataset_name": "orders_normalized",
+                },
+            },
+            {
+                "id": "summarize_orders",
+                "kind": "recipe",
+                "label": "Summarize Orders",
+                "config": {
+                    "language": "python",
+                    "runtime_profile": "python-batch",
+                    "expression": "rows = upstream_results['normalize_orders']['output_artifacts'][0]['rows']\n{'row_count': len(rows), 'total_amount': sum(int(row['amount']) for row in rows)}",
+                    "output_dataset_name": "orders_summary",
+                },
+            },
+        ],
+        "edges": [
+            {"id": "e1", "source": "seed_orders", "target": "normalize_orders"},
+            {"id": "e2", "source": "normalize_orders", "target": "summarize_orders"},
+        ],
+    }
     p = create_pipeline("default", "smoke-pipeline", dag)
     pipeline_id = p["id"]
     print("Pipeline created:", pipeline_id)
@@ -43,8 +84,9 @@ def main():
     # Poll for run completion
     for _ in range(60):
         s = get_run_status(run_id)
-        print("Run status:", s.get("status"))
-        if s.get("status") in ("success", "failed"):
+        status = s.get("status") if s else None
+        print("Run status:", status)
+        if status in ("success", "failed"):
             break
         time.sleep(0.5)
 

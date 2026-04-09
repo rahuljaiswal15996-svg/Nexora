@@ -6,7 +6,7 @@ This test script provides end-to-end testing for the Nexora Data Transformation 
 
 1. **Python 3.8+** installed
 2. **Backend service** running on `http://127.0.0.1:8000`
-3. **Frontend service** running on `http://localhost:3009`
+3. **Frontend service** running on `http://localhost:3000`
 4. **Dependencies** installed
 
 ## Installation
@@ -27,6 +27,12 @@ python test_nexora_comprehensive.py
 - **GET /status** - System health check
 - **GET /metrics** - System performance metrics
 - **GET /history** - Conversion history
+- **POST /auth/token** - Development token issuance for local validation
+- **GET /projects** - Project portfolio inventory
+- **GET /catalog/datasets** - Catalog dataset inventory
+- **GET /jobs** - Runtime control-plane queue
+- **GET /shadow** - Shadow review inventory
+- **POST /shadow** - Create a shadow comparison run
 - **POST /upload** - File upload endpoint
 - **POST /convert** - Code conversion with AI
 - **POST /parse** - Code parsing to UIR format
@@ -38,8 +44,9 @@ python test_nexora_comprehensive.py
 - **GET /notebooks** - List all notebooks
 - **GET /notebooks/{id}** - Get specific notebook
 - **PUT /notebooks/{id}** - Update notebook
+- **PUT /notebooks/{id}/cells/{cell_id}** - Update notebook cell content
+- **POST /notebooks/{id}/cells/{cell_id}/execute** - Execute a notebook cell
 - **GET /connections** - Data connections
-- **POST /auth/login** - User authentication
 - **POST /validate** - Code validation
 - **POST /deploy** - Code deployment
 
@@ -88,30 +95,33 @@ python test_nexora_comprehensive.py
 
 ### 5. UI Button Functionality
 
-#### Home Page Buttons
-- **Notebooks Button**: Navigates to `/notebooks` page
-- **Pipelines Button**: Navigates to `/pipelines` page
-- **Connections Button**: Navigates to `/connections` page
+#### Home Summary
+- **Start Modernization Batch**: Navigates to `/migration-studio`
+- **Open Flow Builder**: Navigates to `/flow`
+- **Launch Jupyter Workspace**: Navigates to `/notebooks?mode=new`
+- **Open Runtime Ops**: Navigates to `/runtime`
 
-#### Upload Page Buttons
+#### Migration Studio
 - **Upload File Button**: Triggers file selection dialog
 - **Convert Button**: Sends POST /convert request
 - **Parse Button**: Sends POST /parse request
 
-#### Pipeline Page Buttons
-- **Create Pipeline Button**: Opens DAG editor interface
-- **Run Pipeline Button**: Executes pipeline with current configuration
-- **Save Pipeline Button**: Persists pipeline changes
+#### Flow Builder Buttons
+- **Validate Graph Button**: Sends POST /pipelines/validate request
+- **Run Flow Button**: Executes the saved production flow
+- **Save Flow Button**: Persists pipeline graph changes
+- **Open Jupyter Workspace**: Opens node-linked notebook context
 
-#### Notebook Page Buttons
+#### Notebook Workspace Buttons
 - **Create Notebook Button**: Creates new notebook
-- **Execute Cell Button**: Runs individual notebook cells
+- **Execute Cell Button**: Runs individual notebook cells through POST /notebooks/{id}/cells/{cell_id}/execute
 - **Save Notebook Button**: Saves notebook content
+- **Attach To Flow Button**: Persists notebook-to-flow linkage through POST /notebooks/{id}/flow-binding
 
 ## Test Results
 
 The script generates a comprehensive report showing:
-- Total tests run
+- Total completed tests run, excluding RUNNING and INFO log lines
 - Pass/fail/warning counts
 - Detailed results for each test
 - Created resources during testing
@@ -126,7 +136,7 @@ The script generates a comprehensive report showing:
 
 ### Frontend Not Accessible
 - Ensure frontend is running: `cd frontend && npm run dev`
-- Check port 3009 is available
+- Check port 3000 is available
 - Verify Next.js build completed successfully
 
 ### Test Failures

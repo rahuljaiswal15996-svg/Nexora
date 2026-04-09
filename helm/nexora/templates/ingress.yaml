@@ -3,15 +3,31 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "nexora.fullname" . }}
+  labels:
+{{ include "nexora.labels" . | indent 4 }}
   annotations:
 {{ toYaml .Values.ingress.annotations | indent 4 }}
 spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+{{ toYaml .Values.ingress.tls | indent 4 }}
+  {{- end }}
   rules:
     - host: {{ .Values.ingress.host }}
       http:
         paths:
-          - path: /
-            pathType: Prefix
+          - path: {{ .Values.ingress.backendPath }}
+            pathType: {{ .Values.ingress.backendPathType }}
+            backend:
+              service:
+                name: {{ include "nexora.fullname" . }}-backend
+                port:
+                  number: {{ .Values.backend.service.port }}
+          - path: {{ .Values.ingress.frontendPath }}
+            pathType: {{ .Values.ingress.frontendPathType }}
             backend:
               service:
                 name: {{ include "nexora.fullname" . }}-frontend

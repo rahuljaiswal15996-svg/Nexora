@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 
-import PlatformShell, { EmptyState, PlatformPanel, StatusPill } from '../components/PlatformShell';
+import ProjectWorkspaceContext from '../components/ProjectWorkspaceContext';
+import PlatformShell, { EmptyState, MetricTile, PlatformPanel, StatusPill } from '../components/PlatformShell';
+import WorkflowGuide from '../components/WorkflowGuide';
+import { buildWorkspaceHref, useProjectWorkspace } from '../lib/projectWorkspace';
 import { extractItems, isJobActive, toErrorMessage } from '../lib/platform';
 import {
   createExperiment,
@@ -10,7 +13,6 @@ import {
   listExperiments,
   listJobs,
   listModelServing,
-  listProjects,
   registerModelServing,
 } from '../services/api';
 
@@ -22,6 +24,17 @@ function parseJsonInput(value, fallback = {}) {
 }
 
 export default function MLPage() {
+  const {
+    activeProject,
+    activeProjectId,
+    activeWorkspaceId,
+    context: projectNavigationContext,
+    error: projectWorkspaceError,
+    loading: projectWorkspaceLoading,
+    projects: projectOptions,
+    setActiveProject,
+    setActiveWorkspace,
+  } = useProjectWorkspace();
   const [projects, setProjects] = useState([]);
   const [experiments, setExperiments] = useState([]);
   const [runs, setRuns] = useState([]);
@@ -44,20 +57,21 @@ export default function MLPage() {
 
   async function loadML() {
     try {
-      const [projectPayload, experimentPayload, jobPayload, servingPayload] = await Promise.all([
-        listProjects(),
-        listExperiments(),
+      const [experimentPayload, jobPayload, servingPayload] = await Promise.all([
+        listExperiments(activeProjectId || undefined),
         listJobs(undefined, 'experiment_run'),
         listModelServing(),
       ]);
-      const projectItems = extractItems(projectPayload);
       const experimentItems = extractItems(experimentPayload);
-      setProjects(projectItems);
+      setProjects(projectOptions);
       setExperiments(experimentItems);
       setJobs(extractItems(jobPayload));
       setModelServing(extractItems(servingPayload));
-      setSelectedExperimentId((current) => current || experimentItems[0]?.id || '');
-      setForms((current) => ({ ...current, experimentProjectId: current.experimentProjectId || projectItems[0]?.id || '' }));
+      setSelectedExperimentId((current) => (experimentItems.some((experiment) => experiment.id === current) ? current : experimentItems[0]?.id || ''));
+      setForms((current) => ({
+        ...current,
+        experimentProjectId: activeProjectId || current.experimentProjectId || projectOptions[0]?.id || '',
+      }));
       setFeedback('');
     } catch (error) {
       setFeedback(toErrorMessage(error));
@@ -78,8 +92,15 @@ export default function MLPage() {
   }
 
   useEffect(() => {
+    if (projectWorkspaceLoading) {
+      return;
+    }
     loadML();
-  }, []);
+  }, [activeProjectId, projectOptions, projectWorkspaceLoading]);
+
+  useEffect(() => {
+    setProjects(projectOptions);
+  }, [projectOptions]);
 
   useEffect(() => {
     loadRuns(selectedExperimentId);
@@ -104,26 +125,102 @@ export default function MLPage() {
     return () => window.clearInterval(handle);
   }, [activeJob, selectedExperimentId]);
 
+  const activeExperimentJobCount = jobs.filter((job) => isJobActive(job)).length;
+  const mlGuideSteps = [
+    {
+      key: 'project',
+      label: 'Project',
+      description: 'Keep experiment work scoped to the active delivery context.',
+      state: activeProjectId && activeWorkspaceId ? 'complete' : 'next',
+      value: activeProject?.name || 'Select an active project',
+      href: '/projects',
+    },
+    {
+      key: 'notebook',
+      label: 'Notebook',
+      description: 'Prepare features, evaluation logic, or candidate assets for experiment work.',
+      state: experiments.length || runs.length ? 'complete' : 'upcoming',
+      value: `${runs.length} experiment runs tracked`,
+      href: buildWorkspaceHref('/notebooks', projectNavigationContext),
+    },
+    {
+      key: 'flow',
+      label: 'Flow',
+      description: 'Promote validated candidates back into orchestration and deployment paths.',
+      state: experiments.length ? 'complete' : 'next',
+      value: `${experiments.length} experiments registered`,
+      href: buildWorkspaceHref('/flow', projectNavigationContext),
+    },
+    {
+      key: 'ml',
+      label: 'ML',
+      description: 'Track experiments, async runs, and serving endpoints from one project surface.',
+      state: 'current',
+      value: `${modelServing.length} endpoints active`,
+      href: buildWorkspaceHref('/ml', projectNavigationContext),
+    },
+    {
+      key: 'runtime',
+      label: 'Runtime',
+      description: 'Inspect queued jobs and rollout state once experiment work leaves this page.',
+      state: activeExperimentJobCount || activeJob ? 'next' : 'upcoming',
+      value: `${jobs.length} runtime jobs visible`,
+      href: '/runtime',
+    },
+  ];
+
   return (
     <PlatformShell
+      eyebrow="ML Studio"
       title="ML lifecycle and serving"
       description="Experiments and serving endpoints have their own workspace now, and experiment runs execute through the shared async job queue."
-      actions={feedback ? <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-accent/75">{feedback}</div> : null}
+      focus="project"
+      navigationContext={projectNavigationContext}
+      aside={
+        <ProjectWorkspaceContext
+          projects={projectOptions}
+          activeProject={activeProject}
+          activeWorkspaceId={activeWorkspaceId}
+          loading={projectWorkspaceLoading}
+          error={projectWorkspaceError}
+          onProjectChange={setActiveProject}
+          onWorkspaceChange={setActiveWorkspace}
+        />
+      }
+      actions={feedback ? <div className="rounded-2xl border border-stone-200 bg-white/80 px-4 py-3 text-sm text-slate-600">{feedback}</div> : null}
     >
+      <WorkflowGuide
+        currentStep="ml"
+        steps={mlGuideSteps}
+        primaryAction={{ label: 'Open Runtime Ops', href: '/runtime' }}
+        secondaryAction={{ label: 'Open Flow Builder', href: buildWorkspaceHref('/flow', projectNavigationContext), tone: 'secondary' }}
+        title="Use ML Studio as the experiment and serving branch of the main delivery flow"
+        description="ML work should not feel detached from notebooks, flows, and runtime. This workspace now shows where experiment creation, run tracking, and serving registration fit in the broader product path."
+      />
+
+      <PlatformPanel title="ML snapshot" description="Experiment creation, run history, serving registration, and background job progress are visible before the user drills into any single panel.">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricTile label="Experiments" value={experiments.length} detail="Tracked evaluation or training definitions in the active project." />
+          <MetricTile label="Runs" value={runs.length} detail="Recorded experiment runs for the selected experiment." />
+          <MetricTile label="Endpoints" value={modelServing.length} detail="Registered serving endpoints under active lifecycle control." />
+          <MetricTile label="Active Jobs" value={activeExperimentJobCount} detail="Background experiment jobs still moving through the async queue." />
+        </div>
+      </PlatformPanel>
+
       <PlatformPanel title="Experiments" description="Create experiments separately from operational scenario work, then queue experiment runs and watch them complete.">
         <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-          <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="text-lg font-semibold text-white">Create experiment</div>
+          <div className="space-y-4 rounded-3xl border border-stone-200/80 bg-white/82 p-5 shadow-[0_18px_44px_rgba(148,163,184,0.12)]">
+            <div className="text-lg font-semibold text-slate-900">Create experiment</div>
             <input
               value={forms.experimentName}
               onChange={(event) => setForms((current) => ({ ...current, experimentName: event.target.value }))}
               placeholder="Migration quality benchmark"
-              className="w-full rounded-2xl border border-white/10 bg-background/70 px-4 py-3 text-white outline-none"
+              className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-slate-700 outline-none"
             />
             <select
               value={forms.experimentProjectId}
               onChange={(event) => setForms((current) => ({ ...current, experimentProjectId: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-background/70 px-4 py-3 text-white outline-none"
+              className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-slate-700 outline-none"
             >
               <option value="">No project</option>
               {projects.map((project) => (
@@ -135,7 +232,7 @@ export default function MLPage() {
               value={forms.experimentDescription}
               onChange={(event) => setForms((current) => ({ ...current, experimentDescription: event.target.value }))}
               placeholder="Track conversion quality and runtime latency across targets."
-              className="w-full rounded-2xl border border-white/10 bg-background/70 px-4 py-3 text-white outline-none"
+              className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-slate-700 outline-none"
             />
             <button
               onClick={async () => {
@@ -162,22 +259,29 @@ export default function MLPage() {
             </button>
           </div>
 
-          <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="text-lg font-semibold text-white">Queue experiment run</div>
+          <div className="space-y-4 rounded-3xl border border-stone-200/80 bg-white/82 p-5 shadow-[0_18px_44px_rgba(148,163,184,0.12)]">
+            <div className="text-lg font-semibold text-slate-900">Queue experiment run</div>
             <select
               value={selectedExperimentId}
               onChange={(event) => setSelectedExperimentId(event.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-background/70 px-4 py-3 text-white outline-none"
+              className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-slate-700 outline-none"
             >
               <option value="">Select experiment</option>
               {experiments.map((experiment) => (
                 <option key={experiment.id} value={experiment.id}>{experiment.name}</option>
               ))}
             </select>
+            {!experiments.length ? (
+              <EmptyState
+                title="No experiments available yet"
+                message="Create an experiment in the left panel before queueing a run."
+                detail="The run panel becomes actionable as soon as the project has at least one experiment definition."
+              />
+            ) : null}
             <select
               value={forms.runStatus}
               onChange={(event) => setForms((current) => ({ ...current, runStatus: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-background/70 px-4 py-3 text-white outline-none"
+              className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-slate-700 outline-none"
             >
               <option value="completed">Completed</option>
               <option value="failed">Failed</option>
@@ -186,7 +290,7 @@ export default function MLPage() {
               rows={4}
               value={forms.runMetrics}
               onChange={(event) => setForms((current) => ({ ...current, runMetrics: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-background/70 px-4 py-3 font-mono text-sm text-white outline-none"
+              className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 font-mono text-sm text-slate-700 outline-none"
             />
             <button
               onClick={async () => {
@@ -208,12 +312,12 @@ export default function MLPage() {
                 }
               }}
               disabled={busyKey === 'run' || !selectedExperimentId}
-              className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-5 py-3 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-300/15 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-2xl border border-sky-200 bg-sky-50 px-5 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busyKey === 'run' ? 'Queueing...' : 'Queue run'}
             </button>
             {activeJob ? (
-              <div className="rounded-2xl border border-white/10 bg-black/15 px-4 py-3 text-sm text-accent/75">
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/80 px-4 py-3 text-sm text-slate-600">
                 <div className="flex items-center justify-between gap-3">
                   <div>Job {activeJob.id}</div>
                   <StatusPill status={activeJob.status} />
@@ -226,56 +330,64 @@ export default function MLPage() {
 
       <PlatformPanel title="Experiment history and serving endpoints" description="Serving registration stays here with experiment tracking so model lifecycle work has a dedicated surface.">
         <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-          <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="text-lg font-semibold text-white">Experiment runs</div>
+          <div className="space-y-4 rounded-3xl border border-stone-200/80 bg-white/82 p-5 shadow-[0_18px_44px_rgba(148,163,184,0.12)]">
+            <div className="text-lg font-semibold text-slate-900">Experiment runs</div>
             {runs.length ? (
               runs.map((run) => (
-                <div key={run.id} className="rounded-2xl border border-white/10 bg-black/10 p-4">
+                <div key={run.id} className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm text-white">{run.id}</div>
+                    <div className="text-sm text-slate-900">{run.id}</div>
                     <StatusPill status={run.status} />
                   </div>
-                  <pre className="mt-3 overflow-auto rounded-2xl bg-black/20 p-3 text-xs text-accent/65">{JSON.stringify(run.metrics || {}, null, 2)}</pre>
+                  <pre className="mt-3 overflow-auto rounded-2xl border border-stone-200 bg-white p-3 text-xs text-slate-600">{JSON.stringify(run.metrics || {}, null, 2)}</pre>
                 </div>
               ))
             ) : (
-              <EmptyState message="No experiment runs yet for the selected experiment." />
+              <EmptyState
+                title="No experiment runs yet"
+                message="The selected experiment has no recorded runs yet."
+                detail="Queue a run from the upper panel to generate metrics and background job activity for this workspace."
+              />
             )}
 
-            <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
-              <div className="text-sm font-semibold text-white">Recent experiment jobs</div>
+            <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
+              <div className="text-sm font-semibold text-slate-900">Recent experiment jobs</div>
               <div className="mt-3 space-y-2">
                 {jobs.length ? (
                   jobs.slice(0, 4).map((job) => (
-                    <div key={job.id} className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
-                      <div className="text-xs text-accent/70">{job.resource_id || job.id}</div>
+                    <div key={job.id} className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-3 py-2">
+                      <div className="text-xs text-slate-600">{job.resource_id || job.id}</div>
                       <StatusPill status={job.status} />
                     </div>
                   ))
                 ) : (
-                  <div className="text-sm text-accent/55">No experiment jobs yet.</div>
+                  <EmptyState
+                    title="No experiment jobs yet"
+                    message="Background experiment work has not been queued from this project yet."
+                    detail="Once a run is queued, the job queue and status updates appear here automatically."
+                  />
                 )}
               </div>
             </div>
           </div>
 
-          <div className="space-y-4 rounded-3xl border border-white/10 bg-white/5 p-5">
-            <div className="text-lg font-semibold text-white">Register serving endpoint</div>
+          <div className="space-y-4 rounded-3xl border border-stone-200/80 bg-white/82 p-5 shadow-[0_18px_44px_rgba(148,163,184,0.12)]">
+            <div className="text-lg font-semibold text-slate-900">Register serving endpoint</div>
             <input
               value={forms.modelVersionId}
               onChange={(event) => setForms((current) => ({ ...current, modelVersionId: event.target.value }))}
               placeholder="model-version-001"
-              className="w-full rounded-2xl border border-white/10 bg-background/70 px-4 py-3 text-white outline-none"
+              className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-slate-700 outline-none"
             />
             <input
               value={forms.endpointUrl}
               onChange={(event) => setForms((current) => ({ ...current, endpointUrl: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-background/70 px-4 py-3 text-white outline-none"
+              className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-slate-700 outline-none"
             />
             <select
               value={forms.servingStatus}
               onChange={(event) => setForms((current) => ({ ...current, servingStatus: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-background/70 px-4 py-3 text-white outline-none"
+              className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-slate-700 outline-none"
             >
               <option value="active">Active</option>
               <option value="canary">Canary</option>
@@ -308,16 +420,20 @@ export default function MLPage() {
             <div className="space-y-3">
               {modelServing.length ? (
                 modelServing.map((endpoint) => (
-                  <div key={endpoint.id} className="rounded-2xl border border-white/10 bg-black/10 p-4">
+                  <div key={endpoint.id} className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm text-white">{endpoint.endpoint_url}</div>
+                      <div className="text-sm text-slate-900">{endpoint.endpoint_url}</div>
                       <StatusPill status={endpoint.status} />
                     </div>
-                    <div className="mt-2 text-xs text-accent/55">Model version {endpoint.model_version_id}</div>
+                    <div className="mt-2 text-xs text-slate-500">Model version {endpoint.model_version_id}</div>
                   </div>
                 ))
               ) : (
-                <EmptyState message="No serving endpoints yet." />
+                <EmptyState
+                  title="No serving endpoints yet"
+                  message="This project has not registered a serving endpoint yet."
+                  detail="Use the form above to connect a model version to an inference URL and bring serving under lifecycle control."
+                />
               )}
             </div>
           </div>

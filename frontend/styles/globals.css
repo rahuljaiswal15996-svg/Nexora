@@ -1,5 +1,54 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+	html {
+		@apply font-sans;
+		font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+		color-scheme: light;
+		background: #f4efe4;
+	}
+
+	body {
+		@apply antialiased;
+		background:
+			radial-gradient(circle at top left, rgba(14, 165, 233, 0.16), transparent 26%),
+			radial-gradient(circle at 78% 0%, rgba(245, 158, 11, 0.14), transparent 20%),
+			linear-gradient(180deg, #f4efe4 0%, #f7f3eb 46%, #eef4f7 100%);
+		color: #0f172a;
+	}
+
+	::selection {
+		background: rgba(56, 189, 248, 0.22);
+		color: #0f172a;
+	}
+
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: rgba(148, 163, 184, 0.75) transparent;
+	}
+
+	*::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+
+	*::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	*::-webkit-scrollbar-thumb {
+		border: 2px solid transparent;
+		border-radius: 9999px;
+		background: rgba(148, 163, 184, 0.78);
+		background-clip: padding-box;
+	}
+
+	input::placeholder,
+	textarea::placeholder {
+		color: rgba(100, 116, 139, 0.82);
+	}
+}

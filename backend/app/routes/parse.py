@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Header, Uploa
 from datetime import datetime
 from app.core.authz import require_editor
 from app.services.parser import parse_to_uir
+from app.services.pipeline_blueprint import build_pipeline_blueprint, persist_pipeline_blueprint
 from app.services.uir_service import save_uir
 
 router = APIRouter()
@@ -44,6 +45,14 @@ async def parse(
 
     tenant_id = principal.get("tenant_id") or x_tenant_id or "default"
     saved = save_uir(tenant_id, uir)
+    source_pipeline_blueprint = build_pipeline_blueprint(
+        code,
+        uir.get("language"),
+        file.filename,
+        stage="source",
+        uir=uir,
+    )
+    source_pipeline = persist_pipeline_blueprint(tenant_id, source_pipeline_blueprint)
 
     return {
         "status": "ok",
@@ -51,4 +60,5 @@ async def parse(
         "created_at": saved["created_at"],
         "source_language": uir.get("language"),
         "uir": uir,
+        "source_pipeline": source_pipeline,
     }

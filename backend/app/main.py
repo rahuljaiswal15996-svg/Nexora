@@ -1,7 +1,9 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.settings import get_cors_configuration, validate_runtime_configuration
 from app.routes import (
     agent,
     auth,
@@ -28,21 +30,41 @@ from app.routes import (
 from app.services.db import init_db
 from app.middleware.auth_middleware import AuthMiddleware
 from app.middleware.tenant_middleware import TenantMiddleware
+from app.services.notebook import backfill_notebook_scope_columns
 from app.services.observability import PrometheusMiddleware, configure_logging
+from app.services.pipeline_runner import backfill_pipeline_scope_columns
+from app.services.work_maintenance import start_work_maintenance, stop_work_maintenance
+
+
+logger = logging.getLogger("nexora.startup")
+
+
+ALLOWED_ORIGINS, ALLOWED_ORIGIN_REGEX = get_cors_configuration()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_runtime_configuration()
     init_db()
-    yield
+    backfill_summary = backfill_pipeline_scope_columns()
+    if backfill_summary.get("updated"):
+        logger.info("Backfilled pipeline scope columns", extra=backfill_summary)
+    notebook_backfill_summary = backfill_notebook_scope_columns()
+    if notebook_backfill_summary.get("updated"):
+        logger.info("Backfilled notebook scope columns", extra=notebook_backfill_summary)
+    start_work_maintenance()
+    try:
+        yield
+    finally:
+        stop_work_maintenance()
 
 
-app = FastAPI(title="Nexora MVP", lifespan=lifespan)
+app = FastAPI(title="Nexora Platform API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -20,6 +20,9 @@ class ConversionResponse(BaseModel):
     source_language: str | None = None
     target_language: str | None = None
     meta: Dict[str, Any] | None = None
+    source_pipeline: Dict[str, Any] | None = None
+    converted_pipeline: Dict[str, Any] | None = None
+    migration_program: Dict[str, Any] | None = None
 
 
 class UploadResponse(BaseModel):

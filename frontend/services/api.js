@@ -1,4 +1,5 @@
-const BASE_PATH = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+import { resolveInternalApiBaseUrl, resolvePublicApiBaseUrl } from "../lib/runtime-config";
+
 const SESSION_STORAGE_KEY = "nexora.workspace.session";
 
 const DEFAULT_SESSION = {
@@ -10,6 +11,13 @@ const DEFAULT_SESSION = {
 
 function isBrowser() {
   return typeof window !== "undefined";
+}
+
+function resolveApiBasePath() {
+  if (!isBrowser()) {
+    return resolveInternalApiBaseUrl();
+  }
+  return resolvePublicApiBaseUrl();
 }
 
 export function getWorkspaceSession() {
@@ -37,7 +45,7 @@ function persistWorkspaceSession(session) {
 }
 
 async function requestDevToken(session) {
-  const response = await fetch(`${BASE_PATH}/auth/token`, {
+  const response = await fetch(`${resolveApiBasePath()}/auth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -105,7 +113,7 @@ async function buildHeaders(extraHeaders = {}, body) {
 
 async function apiFetch(path, options = {}) {
   const { method = "GET", headers = {}, body } = options;
-  const response = await fetch(`${BASE_PATH}${path}`, {
+  const response = await fetch(`${resolveApiBasePath()}${path}`, {
     method,
     headers: await buildHeaders(headers, body),
     body: body instanceof FormData ? body : body !== undefined ? JSON.stringify(body) : undefined,
@@ -143,6 +151,12 @@ function appendConversionOptions(formData, options = {}) {
   if (options.targetLanguage) {
     formData.append("target_language", options.targetLanguage);
   }
+  if (options.projectId) {
+    formData.append("project_id", options.projectId);
+  }
+  if (options.workspaceId) {
+    formData.append("workspace_id", options.workspaceId);
+  }
 }
 
 async function postFormData(path, formData) {
@@ -179,22 +193,116 @@ export async function parseText(code, options = {}) {
   return postFormData("/parse", formData);
 }
 
-export async function createPipeline(dag, name = "unnamed") {
+function applyPipelineContext(dag, options = {}) {
+  const pipelineDag = dag && typeof dag === "object" ? dag : {};
+  const metadata = pipelineDag.metadata && typeof pipelineDag.metadata === "object" ? pipelineDag.metadata : {};
+  const nextMetadata = {
+    ...metadata,
+    ...(options.projectId ? { project_id: options.projectId } : {}),
+    ...((options.projectId || options.projectName || metadata.project)
+      ? {
+          project: {
+            ...(metadata.project && typeof metadata.project === "object" ? metadata.project : {}),
+            ...(options.projectId ? { id: options.projectId } : {}),
+            ...(options.projectName ? { name: options.projectName } : {}),
+          },
+        }
+      : {}),
+    ...(options.workspaceId ? { workspace_id: options.workspaceId } : {}),
+    ...((options.workspaceId || metadata.workspace)
+      ? {
+          workspace: {
+            ...(metadata.workspace && typeof metadata.workspace === "object" ? metadata.workspace : {}),
+            ...(options.workspaceId ? { id: options.workspaceId } : {}),
+          },
+        }
+      : {}),
+  };
+  return {
+    ...pipelineDag,
+    metadata: nextMetadata,
+  };
+}
+
+export async function createPipeline(dag, name = "unnamed", options = {}) {
   return apiFetch("/pipelines", {
     method: "POST",
-    body: { name, dag },
+    body: { name, dag: applyPipelineContext(dag, options) },
   });
 }
 
-export async function createNotebook(title) {
+export async function updatePipeline(pipelineId, dag, name = "unnamed", options = {}) {
+  return apiFetch(`/pipelines/${pipelineId}`, {
+    method: "PUT",
+    body: { name, dag: applyPipelineContext(dag, options) },
+  });
+}
+
+export async function listPipelines(projectId, workspaceId) {
+  return apiFetch(withQuery("/pipelines", { project_id: projectId, workspace_id: workspaceId }));
+}
+
+export async function backfillPipelineScope(includeExisting = false) {
+  return apiFetch(withQuery("/pipelines/backfill-scope", { include_existing: includeExisting }), {
+    method: "POST",
+  });
+}
+
+export async function getPipelineScopeGapReport(limit = 100) {
+  return apiFetch(withQuery("/pipelines/scope-gaps", { limit }));
+}
+
+export async function listPipelineNodeCatalog() {
+  return apiFetch("/pipelines/node-catalog");
+}
+
+export async function validatePipelineGraph(dag) {
+  return apiFetch("/pipelines/validate", {
+    method: "POST",
+    body: { dag },
+  });
+}
+
+export async function createNotebook(title, options = {}) {
+  const metadata = {
+    ...(options.metadata || {}),
+  };
+  if (options.projectId) {
+    metadata.project_id = options.projectId;
+  }
+  if (options.workspaceId) {
+    metadata.workspace_id = options.workspaceId;
+  }
   return apiFetch("/notebooks", {
     method: "POST",
-    body: { title },
+    body: {
+      title,
+      project_id: options.projectId,
+      workspace_id: options.workspaceId,
+      metadata,
+    },
   });
 }
 
-export async function listNotebooks() {
-  return apiFetch("/notebooks");
+export async function openNotebookWorkspace(source) {
+  return apiFetch("/notebooks/open", {
+    method: "POST",
+    body: { source },
+  });
+}
+
+export async function listNotebooks(projectId, workspaceId) {
+  return apiFetch(withQuery("/notebooks", { project_id: projectId, workspace_id: workspaceId }));
+}
+
+export async function backfillNotebookScope(includeExisting = false) {
+  return apiFetch(withQuery("/notebooks/backfill-scope", { include_existing: includeExisting }), {
+    method: "POST",
+  });
+}
+
+export async function getNotebookScopeGapReport(limit = 100) {
+  return apiFetch(withQuery("/notebooks/scope-gaps", { limit }));
 }
 
 export async function getNotebook(notebookId) {
@@ -214,9 +322,17 @@ export async function deleteNotebook(notebookId) {
   });
 }
 
-export async function executeCell(notebookId, cellId) {
-  return apiFetch(`/notebooks/${notebookId}/cells/${cellId}/execute`, {
+export async function attachNotebookToFlow(notebookId, payload) {
+  return apiFetch(`/notebooks/${notebookId}/flow-binding`, {
     method: "POST",
+    body: payload,
+  });
+}
+
+export async function executeNotebook(notebookId, payload) {
+  return apiFetch(`/notebooks/${notebookId}/executions`, {
+    method: "POST",
+    body: payload,
   });
 }
 
@@ -238,6 +354,10 @@ export async function listConnections() {
   return apiFetch("/connections");
 }
 
+export async function getConnectionStats() {
+  return apiFetch("/connections/stats");
+}
+
 export async function createConnection(connection) {
   return apiFetch("/connections", {
     method: "POST",
@@ -253,6 +373,10 @@ export async function previewConnectionDataset(connectionId, datasetName, limit 
   return apiFetch(
     `/connections/${connectionId}/datasets/preview?dataset_name=${encodeURIComponent(datasetName)}&limit=${limit}`
   );
+}
+
+export async function getConnectionDatasetSchema(connectionId, datasetName) {
+  return apiFetch(`/connections/${connectionId}/datasets/schema?dataset_name=${encodeURIComponent(datasetName)}`);
 }
 
 export async function testConnection(connectionId) {
@@ -279,8 +403,33 @@ export async function getRunStatus(runId) {
   return apiFetch(`/pipelines/runs/${runId}`);
 }
 
+export async function listRunNodes(runId) {
+  return apiFetch(`/pipelines/runs/${runId}/nodes`);
+}
+
+export async function listRunLogs(runId, options = {}) {
+  return apiFetch(
+    withQuery(`/pipelines/runs/${runId}/logs`, {
+      node_id: options.nodeId,
+      after_id: options.afterId,
+      limit: options.limit,
+    })
+  );
+}
+
 export async function getPipeline(pipelineId) {
   return apiFetch(`/pipelines/${pipelineId}`);
+}
+
+export async function updatePipelineScope(pipelineId, projectId, workspaceId) {
+  return apiFetch(`/pipelines/${pipelineId}/scope`, {
+    method: "PUT",
+    body: { project_id: projectId, workspace_id: workspaceId },
+  });
+}
+
+export async function listPipelineRuns(status, pipelineId) {
+  return apiFetch(withQuery("/pipelines/runs", { status, pipeline_id: pipelineId }));
 }
 
 export async function listShadowRuns(status) {
@@ -316,6 +465,10 @@ export async function listProjects() {
 
 export async function getProject(projectId) {
   return apiFetch(`/projects/${projectId}`);
+}
+
+export async function listProjectWorkspaces(projectId) {
+  return apiFetch(`/projects/${projectId}/workspaces`);
 }
 
 export async function createProject(project) {
@@ -404,6 +557,17 @@ export async function createDeployTarget(payload) {
 
 export async function listDeployments() {
   return apiFetch("/deployments");
+}
+
+export async function getDeployment(deploymentId) {
+  return apiFetch(`/deployments/${deploymentId}`);
+}
+
+export async function rollbackDeployment(deploymentId, payload = {}) {
+  return apiFetch(`/deployments/${deploymentId}/rollback`, {
+    method: "POST",
+    body: payload,
+  });
 }
 
 export async function deployPipelineAsset(payload) {
@@ -518,4 +682,24 @@ export async function listJobs(status, jobType) {
 
 export async function getJob(jobId) {
   return apiFetch(`/jobs/${jobId}`);
+}
+
+export async function cancelJob(jobId) {
+  return apiFetch(`/jobs/${jobId}/cancel`, {
+    method: "POST",
+  });
+}
+
+export async function retryJob(jobId) {
+  return apiFetch(`/jobs/${jobId}/retry`, {
+    method: "POST",
+  });
+}
+
+export async function getSystemStatus() {
+  return apiFetch('/status');
+}
+
+export async function getAgentFleet() {
+  return apiFetch('/agent/fleet');
 }

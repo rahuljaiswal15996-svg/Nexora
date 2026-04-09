@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Header
-from typing import Dict, Any, List
+from typing import Dict, Any
 from app.services.pipeline_optimizer import PipelineOptimizerService
 
 router = APIRouter()

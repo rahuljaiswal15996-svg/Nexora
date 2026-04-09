@@ -1,18 +1,87 @@
-import { useState, useRef, useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+
 import MonacoEditorWrapper from './MonacoEditorWrapper';
 
-export default function Cell({ cell, isExecuting, onUpdate, onExecute, onDelete, onAddCell }) {
-  const [isEditing, setIsEditing] = useState(false);
+const toolbarButtonClass = 'rounded-[18px] border px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition';
+
+function renderOutput(output, index) {
+  if (!output) {
+    return null;
+  }
+
+  if (output.output_type === 'stream') {
+    return (
+      <pre key={index} className="overflow-x-auto whitespace-pre-wrap rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+        {output.text}
+      </pre>
+    );
+  }
+
+  if (output.output_type === 'execute_result') {
+    return (
+      <div key={index} className="rounded-2xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800">
+        <div className="mb-2 text-[11px] uppercase tracking-[0.24em] text-sky-700/60">Result {output.execution_count ? `#${output.execution_count}` : ''}</div>
+        <pre className="overflow-x-auto whitespace-pre-wrap">{output.data?.['text/plain'] || ''}</pre>
+      </div>
+    );
+  }
+
+  if (output.output_type === 'error') {
+    return (
+      <div key={index} className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+        <div className="font-semibold">{output.ename}: {output.evalue}</div>
+        <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-rose-700/85">{(output.traceback || []).join('\n')}</pre>
+      </div>
+    );
+  }
+
+  return (
+    <pre key={index} className="overflow-x-auto whitespace-pre-wrap rounded-2xl border border-stone-200 bg-stone-50 p-3 text-sm text-slate-700">
+      {JSON.stringify(output, null, 2)}
+    </pre>
+  );
+}
+
+function nextLanguage(cell) {
+  return cell?.metadata?.language || 'python';
+}
+
+export default function Cell({
+  cell,
+  isExecuting,
+  isSelected = false,
+  languageOptions = [],
+  onSelect,
+  onUpdate,
+  onExecute,
+  onDelete,
+  onAddCell,
+}) {
   const [content, setContent] = useState(cell.content);
+  const [language, setLanguage] = useState(nextLanguage(cell));
   const cellRef = useRef(null);
 
   useEffect(() => {
     setContent(cell.content);
   }, [cell.content]);
 
+  useEffect(() => {
+    setLanguage(nextLanguage(cell));
+  }, [cell.metadata]);
+
   const handleContentChange = (newContent) => {
     setContent(newContent);
     onUpdate({ content: newContent });
+  };
+
+  const handleLanguageChange = (nextValue) => {
+    setLanguage(nextValue);
+    onUpdate({
+      metadata: {
+        ...(cell.metadata || {}),
+        language: nextValue,
+      },
+    });
   };
 
   const handleExecute = () => {
@@ -25,156 +94,140 @@ export default function Cell({ cell, isExecuting, onUpdate, onExecute, onDelete,
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       handleExecute();
-    } else if (e.key === 'Escape') {
-      setIsEditing(false);
     }
   };
 
-  const renderOutput = (output) => {
-    switch (output.output_type) {
-      case 'stream':
-        return (
-          <pre className="text-sm text-accent bg-surface p-2 rounded border overflow-x-auto">
-            {output.text}
-          </pre>
-        );
-      case 'execute_result':
-        return (
-          <div className="text-sm">
-            <div className="text-primary font-mono mb-1">
-              Out [{output.execution_count}]:
-            </div>
-            <pre className="text-accent bg-surface p-2 rounded border overflow-x-auto">
-              {output.data['text/plain']}
-            </pre>
-          </div>
-        );
-      case 'error':
-        return (
-          <div className="text-sm text-red-600 bg-red-50 p-2 rounded border border-red-200">
-            <div className="font-semibold">{output.ename}: {output.evalue}</div>
-            <pre className="text-xs mt-1 overflow-x-auto">
-              {output.traceback.join('\n')}
-            </pre>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
+  const editorHeight = useMemo(() => {
+    const lineCount = Math.max((content || '').split('\n').length, cell.type === 'markdown' ? 6 : 8);
+    return Math.min(520, lineCount * 22 + 28);
+  }, [cell.type, content]);
 
   return (
     <div
       ref={cellRef}
-      className="notebook-cell mb-4 border border-surface-hover rounded-lg bg-surface"
+      onClick={onSelect}
+      className={`mb-4 rounded-[30px] border transition ${
+        isSelected
+          ? 'border-sky-200 bg-white/90 shadow-[0_22px_54px_rgba(148,163,184,0.14)]'
+          : 'border-stone-200 bg-white/80 hover:border-stone-300 hover:bg-white'
+      }`}
     >
-      {/* Cell Header */}
-      <div className="cell-header flex items-center justify-between px-3 py-2 border-b border-surface-hover bg-surface-hover">
-        <div className="flex items-center space-x-2">
-          <span className="text-xs font-medium text-primary uppercase">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className={`rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] ${cell.type === 'markdown' ? 'bg-amber-50 text-amber-700' : 'bg-sky-50 text-sky-700'}`}>
             {cell.type}
           </span>
           {cell.execution_count && (
-            <span className="text-xs text-accent">
+            <span className="text-xs text-slate-500">
               [{cell.execution_count}]
             </span>
           )}
           {isExecuting && (
-            <div className="flex items-center space-x-1">
-              <div className="animate-spin rounded-full h-3 w-3 border border-primary border-t-transparent"></div>
-              <span className="text-xs text-accent">Running...</span>
+            <div className="flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
+              <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></div>
+              <span>Running</span>
             </div>
           )}
         </div>
 
-        <div className="flex items-center space-x-1">
-          {cell.type === 'code' && (
+        <div className="flex flex-wrap items-center gap-2">
+          {cell.type === 'code' ? (
+            <select
+              value={language}
+              onChange={(event) => handleLanguageChange(event.target.value)}
+              className="rounded-[18px] border border-stone-200 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700 outline-none"
+            >
+              {languageOptions.map((option) => (
+                <option key={option.id} value={option.id}>{option.label}</option>
+              ))}
+            </select>
+          ) : null}
+
+          {cell.type === 'code' ? (
             <button
-              onClick={handleExecute}
+              onClick={(event) => {
+                event.stopPropagation();
+                handleExecute();
+              }}
               disabled={isExecuting}
-              className="p-1 text-accent hover:text-primary rounded disabled:opacity-50"
+              className={`${toolbarButtonClass} border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 disabled:opacity-50`}
               title="Run cell (Ctrl+Enter)"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+              Run
             </button>
-          )}
+          ) : null}
 
           <button
-            onClick={() => onAddCell('code')}
-            className="p-1 text-accent hover:text-primary rounded"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddCell('code', cell.id);
+            }}
+            className={`${toolbarButtonClass} border-stone-200 bg-stone-50 text-slate-700 hover:border-stone-300 hover:bg-white`}
             title="Add code cell below"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
+            + Code
           </button>
 
           <button
-            onClick={() => onAddCell('markdown')}
-            className="p-1 text-accent hover:text-primary rounded"
-            title="Add text cell below"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddCell('markdown', cell.id);
+            }}
+            className={`${toolbarButtonClass} border-stone-200 bg-stone-50 text-slate-700 hover:border-stone-300 hover:bg-white`}
+            title="Add markdown cell below"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
+            + Text
           </button>
 
           <button
-            onClick={onDelete}
-            className="p-1 text-accent hover:text-red-600 rounded"
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+            className={`${toolbarButtonClass} border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100`}
             title="Delete cell"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            Delete
           </button>
         </div>
       </div>
 
-      {/* Cell Content */}
-      <div className="cell-content p-3">
+      <div className="p-4">
         {cell.type === 'markdown' ? (
-          <div
-            className="prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{
-              __html: content
-                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-                .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-                .replace(/\*(.*)\*/gim, '<em>$1</em>')
-                .replace(/`([^`]+)`/gim, '<code>$1</code>')
-                .replace(/\n/gim, '<br>')
-            }}
+          <textarea
+            value={content}
+            onChange={(event) => handleContentChange(event.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={Math.max(6, (content || '').split('\n').length + 1)}
+            className="w-full rounded-[24px] border border-stone-200 bg-white px-4 py-4 text-sm leading-7 text-slate-800 outline-none transition focus:border-sky-300 focus:ring-2 focus:ring-sky-100"
+            placeholder="# Describe this step\n\nAdd markdown notes, assumptions, and run guidance here."
           />
         ) : (
           <MonacoEditorWrapper
             value={content}
             onChange={handleContentChange}
-            language="python"
-            height={cell.content.split('\n').length * 20 + 20}
+            language={language}
+            height={editorHeight}
             onKeyDown={handleKeyDown}
             options={{
               minimap: { enabled: false },
-              lineNumbers: 'off',
+              lineNumbers: 'on',
               glyphMargin: false,
               folding: false,
-              renderLineHighlight: 'none',
+              renderLineHighlight: 'all',
               scrollBeyondLastLine: false,
-              wordWrap: 'on'
+              wordWrap: 'on',
             }}
           />
         )}
       </div>
 
-      {/* Cell Outputs */}
       {cell.outputs && cell.outputs.length > 0 && (
-        <div className="cell-outputs px-3 pb-3">
+        <div className="border-t border-stone-200 px-4 pb-4 pt-1">
+          <div className="mb-3 text-[11px] uppercase tracking-[0.24em] text-stone-500">Outputs</div>
           {cell.outputs.map((output, index) => (
             <div key={index} className="mt-2">
-              {renderOutput(output)}
+              {renderOutput(output, index)}
             </div>
           ))}
         </div>

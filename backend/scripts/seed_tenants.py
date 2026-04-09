@@ -1,6 +1,6 @@
 from datetime import datetime
 from uuid import uuid4
-from app.services.db import init_db, get_connection
+from app.services.db import init_db, get_connection, upsert_row
 
 
 def seed():
@@ -9,13 +9,21 @@ def seed():
     tid = "default"
     uid = str(uuid4())
     with get_connection() as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO tenants (id, name, plan, created_at) VALUES (?, ?, ?, ?)",
-            (tid, "Default Tenant", "free", now),
+        upsert_row(
+            "tenants",
+            {"id": tid, "name": "Default Tenant", "plan": "free", "created_at": now},
+            connection=conn,
         )
-        conn.execute(
-            "INSERT OR REPLACE INTO users (id, tenant_id, email, role, created_at) VALUES (?, ?, ?, ?, ?)",
-            (uid, tid, "admin@local", "admin", now),
+        upsert_row(
+            "users",
+            {
+                "id": uid,
+                "tenant_id": tid,
+                "email": "admin@local",
+                "role": "admin",
+                "created_at": now,
+            },
+            connection=conn,
         )
         conn.commit()
     print("Seeded tenant=default user=admin@local")

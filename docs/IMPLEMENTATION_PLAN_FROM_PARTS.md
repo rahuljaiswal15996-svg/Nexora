@@ -35,10 +35,9 @@ Week 4 — Production Auth & Multi-tenancy
 - Add tenant quotas and basic usage metering.
 
 Week 5 — Infra & CI/CD Foundations
-- Add GitHub Actions: lint → test → build → image push.
-- Add Helm chart skeleton and Terraform modules for infra.
-- Add secrets management guidance (K8s secrets / Vault).
-	- Helm chart and Terraform skeleton: scaffolded (see `helm/nexora` and `infra/terraform/`).
+- Add GitHub Actions: lint → test → build → image push. (IMPLEMENTED — backend and frontend validation, compose readiness, Helm lint/template, and Terraform validate now run in CI.)
+- Add Helm chart and Terraform modules for infra. (IMPLEMENTED — `helm/nexora` now contains production-oriented backend/frontend config, secret, probes, and ingress; `infra/terraform` installs the chart with `helm_release`.)
+- Add secrets management guidance (K8s secrets / Vault). (PARTIAL — backend `DATABASE_URL` is injected through a Helm Secret; broader secret-store integration remains open.)
 
 Week 6 — Data Plane Agent + Observability
 - Implement data-plane agent skeleton (secure outbound job runner).

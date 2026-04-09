@@ -1,7 +1,8 @@
-import os
 from typing import Any, Dict
 
 from fastapi import Header, HTTPException, Request
+
+from app.core.settings import get_default_role, get_default_tenant_id, get_default_user_id
 
 
 ROLE_ORDER = {
@@ -9,12 +10,11 @@ ROLE_ORDER = {
     "editor": 1,
     "admin": 2,
 }
-DEFAULT_ROLE = os.getenv("NEXORA_DEFAULT_ROLE", "admin").lower()
 Principal = Dict[str, Any]
 
 
 def normalize_role(role: str | None) -> str:
-    candidate = (role or DEFAULT_ROLE or "viewer").lower()
+    candidate = (role or get_default_role() or "viewer").lower()
     return candidate if candidate in ROLE_ORDER else "viewer"
 
 
@@ -31,13 +31,13 @@ def build_principal(
         or payload.get("tenant")
         or payload.get("tenant_id")
         or payload.get("tid")
-        or "default"
+        or get_default_tenant_id()
     )
     user_id = (
         payload.get("sub")
         or getattr(request.state, "user", None)
         or x_user_id
-        or "dev@local"
+        or get_default_user_id()
     )
     role = normalize_role(payload.get("role") or x_user_role)
 
@@ -53,11 +53,11 @@ def build_principal(
 
 
 def principal_tenant(request: Request, principal: Principal) -> str:
-    return str(principal.get("tenant_id") or getattr(request.state, "tenant_id", "default"))
+    return str(principal.get("tenant_id") or getattr(request.state, "tenant_id", get_default_tenant_id()))
 
 
 def principal_user(principal: Principal) -> str:
-    return str(principal.get("user_id") or "dev@local")
+    return str(principal.get("user_id") or get_default_user_id())
 
 
 def require_min_role(min_role: str):

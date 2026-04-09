@@ -1,0 +1,84 @@
+# Copy this file to staging.tfvars and keep the working copy untracked.
+# This file is for non-sensitive staging values only.
+
+# Optional when using the PowerShell helper with Docker fallback.
+# kubeconfig_path = "~/.kube/config"
+
+namespace         = "nexora-staging"
+release_name      = "nexora-staging"
+fullname_override = "nexora-staging"
+
+create_namespace     = true
+helm_timeout_seconds = 900
+
+backend_image_repository  = "ghcr.io/your-org/nexora-backend"
+backend_image_tag         = "2026.04.08"
+frontend_image_repository = "ghcr.io/your-org/nexora-frontend"
+frontend_image_tag        = "2026.04.08"
+agent_image_repository    = "ghcr.io/your-org/nexora-agent"
+agent_image_tag           = "2026.04.08"
+
+image_pull_policy  = "IfNotPresent"
+image_pull_secrets = ["ghcr-pull-secret"]
+
+backend_replicas  = 2
+frontend_replicas = 2
+agent_enabled     = true
+agent_replicas    = 1
+
+# Staging should normally mirror the external data-service path.
+# Flip these to true only if you intentionally want in-cluster PostgreSQL and Redis.
+postgresql_enabled = false
+redis_enabled      = false
+
+backend_environment           = "production"
+backend_require_explicit_cors = true
+backend_allowed_origins       = ["https://staging.nexora.example.com"]
+backend_allow_dev_tokens      = false
+backend_default_role          = "viewer"
+backend_default_user_id       = "staging-operator@nexora.local"
+backend_llm_provider          = "openai"
+backend_openai_model          = "gpt-4o-mini"
+
+backend_work_broker                         = "redis"
+backend_broker_db_fallback_enabled          = false
+backend_broker_queue_prefix                 = "nexora-staging"
+backend_broker_visibility_timeout_seconds   = 30
+backend_broker_maintenance_interval_seconds = 10
+backend_broker_message_max_retries          = 3
+backend_broker_message_ttl_seconds          = 900
+backend_broker_requeue_loop_threshold       = 2
+backend_broker_requeue_history_limit        = 6
+backend_remote_run_lease_seconds            = 90
+backend_remote_run_max_attempts             = 3
+backend_remote_job_lease_seconds            = 90
+backend_remote_job_max_attempts             = 3
+backend_pipeline_log_page_size              = 200
+backend_hitl_threshold                      = 0.85
+backend_db_connect_retries                  = 10
+backend_db_connect_retry_delay              = 3
+
+frontend_public_api_base_url   = "/api"
+frontend_internal_api_base_url = ""
+
+agent_control_url       = ""
+agent_consumer_mode     = "broker"
+agent_heartbeat_interval = 20
+agent_poll_interval      = 2
+
+ingress_enabled    = true
+ingress_class_name = "nginx"
+ingress_host       = "staging.nexora.example.com"
+ingress_annotations = {
+  "cert-manager.io/cluster-issuer" = "letsencrypt"
+}
+ingress_tls = [
+  {
+    secret_name = "nexora-staging-tls"
+    hosts       = ["staging.nexora.example.com"]
+  }
+]
+
+backend_extra_env  = {}
+frontend_extra_env = {}
+agent_extra_env    = {}

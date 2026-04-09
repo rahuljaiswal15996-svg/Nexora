@@ -32,13 +32,13 @@ export function formatCurrency(value) {
 export function statusTone(status = '') {
   const normalized = status.toLowerCase();
   if (normalized.includes('pass') || normalized.includes('active') || normalized.includes('complete') || normalized.includes('success') || normalized.includes('deployed')) {
-    return 'border-emerald-400/25 bg-emerald-500/10 text-emerald-100';
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   }
   if (normalized.includes('queue') || normalized.includes('draft') || normalized.includes('pending') || normalized.includes('running')) {
-    return 'border-amber-400/25 bg-amber-500/10 text-amber-100';
+    return 'border-amber-200 bg-amber-50 text-amber-700';
   }
   if (normalized.includes('fail') || normalized.includes('blocked') || normalized.includes('error')) {
-    return 'border-rose-400/25 bg-rose-500/10 text-rose-100';
+    return 'border-rose-200 bg-rose-50 text-rose-700';
   }
-  return 'border-white/10 bg-white/10 text-accent';
+  return 'border-slate-200 bg-slate-50 text-slate-600';
 }

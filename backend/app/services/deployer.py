@@ -6,6 +6,39 @@ from app.services.platform_store import fetch_all, fetch_one, json_dumps, json_l
 
 
 class DeployerService:
+    def append_deployment_run(
+        self,
+        deployment_id: str,
+        tenant_id: str,
+        status: str,
+        status_details: Optional[Dict[str, Any]] = None,
+        run_id: str | None = None,
+    ) -> Optional[Dict[str, Any]]:
+        deployment = fetch_one("SELECT id FROM deployments WHERE id = ? AND tenant_id = ?", (deployment_id, tenant_id))
+        if not deployment:
+            return None
+
+        timestamp = now_iso()
+        with get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO deployment_runs (id, deployment_id, tenant_id, run_id, status, status_details, started_at, finished_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid4()),
+                    deployment_id,
+                    tenant_id,
+                    run_id,
+                    status,
+                    json_dumps(status_details or {}),
+                    timestamp,
+                    timestamp if status in {"success", "failed", "cancelled", "rolled_back"} else None,
+                ),
+            )
+            conn.commit()
+        return self.get_deployment(deployment_id, tenant_id)
+
     def list_targets(self, tenant_id: str) -> List[Dict[str, Any]]:
         targets = fetch_all(
             "SELECT * FROM deployment_targets WHERE tenant_id = ? ORDER BY updated_at DESC",

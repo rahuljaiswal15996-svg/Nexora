@@ -1,25 +1,30 @@
 from fastapi import APIRouter, HTTPException, Body
-from datetime import datetime, timedelta
-import os
+from datetime import datetime, timedelta, timezone
 import jwt
 
-router = APIRouter()
+from app.core.settings import (
+    get_default_role,
+    get_default_tenant_id,
+    get_default_user_id,
+    get_dev_token_expiration_seconds,
+    get_dev_tokens_allowed,
+    get_jwt_algorithm,
+    get_jwt_secret,
+)
 
-SECRET = os.getenv("NEXORA_JWT_SECRET", "dev-secret")
-ALGO = "HS256"
-DEV_TOKENS_ALLOWED = os.getenv("NEXORA_ALLOW_DEV_TOKENS", "true").lower() == "true"
+router = APIRouter()
 
 
 @router.post("/auth/token")
 async def issue_token(payload: dict = Body(...)):
-    if not DEV_TOKENS_ALLOWED:
+    if not get_dev_tokens_allowed():
         raise HTTPException(status_code=403, detail="Dev token issuance disabled")
 
-    tenant = payload.get("tenant_id", "default")
-    user = payload.get("user", "dev@local")
-    role = payload.get("role", "admin")
-    exp_seconds = int(payload.get("exp_seconds", 86400))
-    now = datetime.utcnow()
+    tenant = payload.get("tenant_id", get_default_tenant_id())
+    user = payload.get("user", get_default_user_id())
+    role = payload.get("role", get_default_role())
+    exp_seconds = int(payload.get("exp_seconds", get_dev_token_expiration_seconds()))
+    now = datetime.now(timezone.utc)
     claims = {
         "sub": user,
         "tenant": tenant,
@@ -27,5 +32,5 @@ async def issue_token(payload: dict = Body(...)):
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(seconds=exp_seconds)).timestamp()),
     }
-    token = jwt.encode(claims, SECRET, algorithm=ALGO)
+    token = jwt.encode(claims, get_jwt_secret(), algorithm=get_jwt_algorithm())
     return {"access_token": token, "token_type": "bearer", "expires_in": exp_seconds}

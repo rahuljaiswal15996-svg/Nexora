@@ -1,0 +1,41 @@
+{{- if .Values.agent.enabled }}
+{{- $agentControlUrl := .Values.agent.env.NEXORA_CONTROL_URL -}}
+{{- if not $agentControlUrl -}}
+{{- $agentControlUrl = printf "http://%s-backend:%v" (include "nexora.fullname" .) .Values.backend.service.port -}}
+{{- end }}
+{{- $agentBrokerUrl := .Values.agent.env.NEXORA_BROKER_URL -}}
+{{- if and (not $agentBrokerUrl) .Values.redis.enabled -}}
+{{- $agentBrokerUrl = printf "redis://%s-redis:%v/0" (include "nexora.fullname" .) .Values.redis.service.port -}}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nexora.fullname" . }}-agent
+  labels:
+{{ include "nexora.labels" . | indent 4 }}
+data:
+  NEXORA_CONTROL_URL: {{ $agentControlUrl | quote }}
+  NEXORA_BROKER_URL: {{ $agentBrokerUrl | quote }}
+{{- range $key, $value := .Values.agent.env }}
+{{- if and (ne $key "NEXORA_CONTROL_URL") (ne $key "NEXORA_BROKER_URL") }}
+  {{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nexora.fullname" . }}-frontend
+  labels:
+{{ include "nexora.labels" . | indent 4 }}
+data:
+  INTERNAL_API_BASE_URL: {{ default (printf "http://%s-backend:%v" (include "nexora.fullname" .) .Values.backend.service.port) .Values.frontend.env.INTERNAL_API_BASE_URL | quote }}
+  NEXT_PUBLIC_API_BASE_URL: {{ default "/api" .Values.frontend.env.NEXT_PUBLIC_API_BASE_URL | quote }}
+{{- range $key, $value := .Values.frontend.env }}
+{{- if and (ne $key "INTERNAL_API_BASE_URL") (ne $key "NEXT_PUBLIC_API_BASE_URL") }}
+  {{ $key }}: {{ $value | quote }}
+{{- end }}
+{{- end }}

@@ -1,30 +1,183 @@
+{{- include "nexora.backend.validate" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "nexora.fullname" . }}-backend
   labels:
-    app: {{ include "nexora.name" . }}
-    component: backend
+{{ include "nexora.labels" . | indent 4 }}
+    app.kubernetes.io/component: backend
 spec:
   replicas: {{ .Values.backend.replicas }}
   selector:
     matchLabels:
-      app: {{ include "nexora.name" . }}
-      component: backend
+{{ include "nexora.selectorLabels" . | indent 6 }}
+      app.kubernetes.io/component: backend
   template:
     metadata:
       labels:
-        app: {{ include "nexora.name" . }}
-        component: backend
+{{ include "nexora.selectorLabels" . | indent 8 }}
+        app.kubernetes.io/component: backend
     spec:
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{- end }}
+{{- $backendSecrets := coalesce .Values.backend.secrets .Values.backend.secretEnv (dict) }}
+{{- $backendBrokerUrl := .Values.backend.env.NEXORA_BROKER_URL -}}
+{{- if and (not $backendBrokerUrl) .Values.redis.enabled -}}
+{{- $backendBrokerUrl = printf "redis://%s-redis:%v/0" (include "nexora.fullname" .) .Values.redis.service.port -}}
+{{- end }}
       containers:
         - name: backend
           image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
           imagePullPolicy: "{{ .Values.backend.image.pullPolicy }}"
+          env:
+{{- range $key := keys .Values.backend.env | sortAlpha }}
+{{- if ne $key "NEXORA_BROKER_URL" }}
+            - name: {{ $key }}
+              value: {{ index $.Values.backend.env $key | quote }}
+{{- end }}
+{{- end }}
+            - name: NEXORA_BROKER_URL
+              value: {{ $backendBrokerUrl | quote }}
+{{- range $key := keys $backendSecrets | sortAlpha }}
+            - name: {{ $key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nexora.fullname" $ }}-backend
+                  key: {{ $key }}
+{{- end }}
           ports:
-            - containerPort: {{ .Values.backend.service.port }}
+            - name: http
+              containerPort: {{ .Values.backend.service.port }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.backend.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.backend.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.backend.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.backend.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.backend.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.backend.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.probes.liveness.failureThreshold }}
           resources:
 {{ toYaml .Values.backend.resources | indent 12 }}
+
+---
+
+{{- if .Values.agent.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nexora.fullname" . }}-agent
+  labels:
+{{ include "nexora.labels" . | indent 4 }}
+    app.kubernetes.io/component: agent
+spec:
+  replicas: {{ .Values.agent.replicas }}
+  selector:
+    matchLabels:
+{{ include "nexora.selectorLabels" . | indent 6 }}
+      app.kubernetes.io/component: agent
+  template:
+    metadata:
+      labels:
+{{ include "nexora.selectorLabels" . | indent 8 }}
+        app.kubernetes.io/component: agent
+    spec:
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{- end }}
+      containers:
+        - name: agent
+          image: "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag }}"
+          imagePullPolicy: "{{ .Values.agent.image.pullPolicy }}"
+          envFrom:
+            - configMapRef:
+                name: {{ include "nexora.fullname" . }}-agent
+          readinessProbe:
+            exec:
+              command:
+{{ toYaml .Values.agent.probes.readiness.command | indent 16 }}
+            initialDelaySeconds: {{ .Values.agent.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.agent.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.agent.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.agent.probes.readiness.failureThreshold }}
+          livenessProbe:
+            exec:
+              command:
+{{ toYaml .Values.agent.probes.liveness.command | indent 16 }}
+            initialDelaySeconds: {{ .Values.agent.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.agent.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.agent.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.agent.probes.liveness.failureThreshold }}
+          resources:
+{{ toYaml .Values.agent.resources | indent 12 }}
+{{- end }}
+
+---
+
+{{- if .Values.redis.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "nexora.fullname" . }}-redis
+  labels:
+{{ include "nexora.labels" . | indent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+{{ include "nexora.selectorLabels" . | indent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+{{ include "nexora.selectorLabels" . | indent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{- end }}
+      containers:
+        - name: redis
+          image: "{{ .Values.redis.image.repository }}:{{ .Values.redis.image.tag }}"
+          imagePullPolicy: "{{ .Values.redis.image.pullPolicy }}"
+          args:
+            - redis-server
+            - --save
+            - ""
+            - --appendonly
+            - "no"
+          ports:
+            - name: redis
+              containerPort: {{ .Values.redis.service.port }}
+          readinessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: {{ .Values.redis.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.redis.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.redis.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.redis.probes.readiness.failureThreshold }}
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: {{ .Values.redis.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.redis.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.redis.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.redis.probes.liveness.failureThreshold }}
+          resources:
+{{ toYaml .Values.redis.resources | indent 12 }}
+{{- end }}
 
 ---
 
@@ -33,25 +186,49 @@ kind: Deployment
 metadata:
   name: {{ include "nexora.fullname" . }}-frontend
   labels:
-    app: {{ include "nexora.name" . }}
-    component: frontend
+{{ include "nexora.labels" . | indent 4 }}
+    app.kubernetes.io/component: frontend
 spec:
   replicas: {{ .Values.frontend.replicas }}
   selector:
     matchLabels:
-      app: {{ include "nexora.name" . }}
-      component: frontend
+{{ include "nexora.selectorLabels" . | indent 6 }}
+      app.kubernetes.io/component: frontend
   template:
     metadata:
       labels:
-        app: {{ include "nexora.name" . }}
-        component: frontend
+{{ include "nexora.selectorLabels" . | indent 8 }}
+        app.kubernetes.io/component: frontend
     spec:
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml .Values.imagePullSecrets | indent 8 }}
+{{- end }}
       containers:
         - name: frontend
           image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
           imagePullPolicy: "{{ .Values.frontend.image.pullPolicy }}"
+          envFrom:
+            - configMapRef:
+                name: {{ include "nexora.fullname" . }}-frontend
           ports:
-            - containerPort: {{ .Values.frontend.service.port }}
+            - name: http
+              containerPort: {{ .Values.frontend.service.port }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.frontend.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.frontend.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.frontend.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.frontend.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.frontend.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.frontend.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.frontend.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.frontend.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.frontend.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.frontend.probes.liveness.failureThreshold }}
           resources:
 {{ toYaml .Values.frontend.resources | indent 12 }}

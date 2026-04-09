@@ -118,6 +118,13 @@ class ProjectService:
             conn.commit()
         return workspace
 
+    def ensure_workspace(self, project_id: str, tenant_id: str, name: str, description: str = "") -> Dict[str, Any]:
+        normalized_name = name.strip().lower()
+        for workspace in self.list_workspaces(project_id, tenant_id):
+            if str(workspace.get("name") or "").strip().lower() == normalized_name:
+                return workspace
+        return self.create_workspace(project_id, tenant_id, name, description)
+
     def list_workspaces(self, project_id: str, tenant_id: str) -> List[Dict[str, Any]]:
         return fetch_all(
             "SELECT id, name, description, created_at, updated_at FROM workspaces WHERE project_id = ? AND tenant_id = ? ORDER BY updated_at DESC",

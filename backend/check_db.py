@@ -1,19 +1,10 @@
-from app.services.db import get_connection
+from app.services.db import list_table_names
 
 def check_notebooks_table():
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="notebooks"')
-        result = cursor.fetchone()
-        print('Notebooks table exists:', result is not None)
-
-        # List all tables
-        cursor.execute('SELECT name FROM sqlite_master WHERE type="table"')
-        tables = cursor.fetchall()
-        print('All tables:', [table[0] for table in tables])
-
-        conn.close()
+        tables = list_table_names()
+        print('Notebooks table exists:', 'notebooks' in tables)
+        print('All tables:', tables)
     except Exception as e:
         print('Error:', e)
 

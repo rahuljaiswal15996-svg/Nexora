@@ -51,10 +51,14 @@ async def log_run(
     experiment_id: str,
     request: Request,
     payload: dict = Body(...),
+    run_mode: str | None = Query(None),
     principal: Principal = Depends(require_editor),
 ):
     tenant_id = principal_tenant(request, principal)
     user_id = principal_user(principal)
+    execution_mode = (run_mode or payload.get("run_mode") or "local").strip().lower()
+    if execution_mode not in {"local", "remote"}:
+        raise HTTPException(status_code=400, detail="run_mode must be 'local' or 'remote'")
     queued = queue_experiment_run(
         tenant_id=tenant_id,
         experiment_id=experiment_id,
@@ -64,11 +68,12 @@ async def log_run(
         metrics=payload.get("metrics") or {},
         artifacts=payload.get("artifacts") or {},
         final_status=(payload.get("status") or "completed").strip(),
+        run_mode=execution_mode,
     )
     run = queued["run"]
     governance_service.log_action(tenant_id, user_id, "run", "experiment", experiment_id, None, run)
     return {
-        "status": "queued",
+        "status": "queued_remote" if execution_mode == "remote" else "queued",
         "job": queued["job"],
         "run": run,
     }

@@ -1,21 +1,75 @@
-version: "3.9"
 services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nexora
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nexora"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+
   backend:
     build:
       context: ..
       dockerfile: docker/Dockerfile.backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-postgresql+psycopg://postgres:postgres@postgres:5432/nexora}"
+      NEXORA_ENV: "${NEXORA_ENV:-development}"
+      NEXORA_ALLOWED_ORIGINS: "${NEXORA_ALLOWED_ORIGINS:-http://localhost:3000}"
+      NEXORA_ALLOWED_ORIGIN_REGEX: "${NEXORA_ALLOWED_ORIGIN_REGEX:-}"
+      NEXORA_ALLOW_DEV_TOKENS: "${NEXORA_ALLOW_DEV_TOKENS:-false}"
+      NEXORA_JWT_SECRET: "${NEXORA_JWT_SECRET:-}"
+      NEXORA_JWT_ALGO: "${NEXORA_JWT_ALGO:-HS256}"
+      NEXORA_DEFAULT_ROLE: "${NEXORA_DEFAULT_ROLE:-admin}"
+      NEXORA_DEFAULT_TENANT_ID: "${NEXORA_DEFAULT_TENANT_ID:-default}"
+      NEXORA_DEFAULT_USER_ID: "${NEXORA_DEFAULT_USER_ID:-admin@nexora.local}"
+      NEXORA_LLM_PROVIDER: "${NEXORA_LLM_PROVIDER:-mock}"
+      NEXORA_OPENAI_MODEL: "${NEXORA_OPENAI_MODEL:-gpt-4o-mini}"
+      NEXORA_WORK_BROKER: "${NEXORA_WORK_BROKER:-redis}"
+      NEXORA_BROKER_URL: "${NEXORA_BROKER_URL:-redis://redis:6379/0}"
     ports:
       - "8000:8000"
-    volumes:
-      - ../backend/app:/app/app
 
   frontend:
     build:
       context: ..
       dockerfile: docker/Dockerfile.frontend
+    depends_on:
+      backend:
+        condition: service_started
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=development
-    volumes:
-      - ../frontend:/app/frontend
+      INTERNAL_API_BASE_URL: "${INTERNAL_API_BASE_URL:-http://backend:8000}"
+
+  agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agent
+    depends_on:
+      backend:
+        condition: service_started
+      redis:
+        condition: service_started
+    environment:
+      NEXORA_CONTROL_URL: "${NEXORA_CONTROL_URL:-http://backend:8000}"
+      NEXORA_WORK_BROKER: "${NEXORA_WORK_BROKER:-redis}"
+      NEXORA_BROKER_URL: "${NEXORA_BROKER_URL:-redis://redis:6379/0}"
+      NEXORA_AGENT_CONSUMER_MODE: "${NEXORA_AGENT_CONSUMER_MODE:-broker}"
+
+volumes:
+  postgres_data:

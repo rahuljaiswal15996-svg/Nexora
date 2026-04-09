@@ -8,6 +8,8 @@ from starlette.responses import Response
 
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
 
+from app.services.broker_observability import broker_observability_snapshot
+
 # Prometheus metrics
 REQUEST_COUNT = Counter("nexora_requests_total", "Total HTTP requests", ["method", "path", "status"])
 REQUEST_LATENCY = Histogram("nexora_request_latency_seconds", "Request latency seconds", ["method", "path"]) 
@@ -32,6 +34,7 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
 
 
 def metrics_response() -> bytes:
+    broker_observability_snapshot()
     return generate_latest()
 
 

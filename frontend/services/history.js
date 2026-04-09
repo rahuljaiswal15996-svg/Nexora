@@ -29,6 +29,18 @@ export function saveLocalHistory(entry) {
   return next;
 }
 
+export function clearLocalHistory() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    window.localStorage.removeItem("nexora_conversion_history");
+  } catch (error) {
+    console.error("Failed to clear local history", error);
+  }
+  return [];
+}
+
 export async function fetchHistory() {
   return request("/history");
 }

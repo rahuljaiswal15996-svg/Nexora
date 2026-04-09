@@ -12,23 +12,24 @@ This document captures the intended UX / platform mockup for Nexora and maps the
 
 ## What the mockup represents
 
-- Left rail: global navigation (Projects, Pipelines, Notebooks, HITL Review).
-- Main center: code comparison / validation widgets and pipeline visualizer area.
-- Right rail: pipeline canvas, run controls, model/feature panels.
-- Bottom / widgets: notebook previews, monitoring cards, recent activity.
+- Left rail: global navigation for Home, Runtime Ops, Connections Hub, and Governance Desk.
+- Main center: migration, flow, notebook, or runtime workspace depending on the current route.
+- Right rail: inspectors for node config, runtime controls, governance context, or deployment state.
+- Bottom / widgets: notebook outputs, run telemetry, monitoring cards, and recent activity.
 
 ## How this maps to the current repo state
 
-- The core backend routes and services (parse/convert/history/shadow/pipelines) are implemented under `backend/app/` and are exercised by the smoke test (`backend/scripts/smoke_test.py`).
-- The frontend implements MVP pages (upload/compare/history/pipelines/review) under `frontend/pages/` with small components in `frontend/components/` and API helpers in `frontend/services/api.js`.
-- The agent scaffold is in `agent/agent.py` and demonstrates the remote-run lifecycle (claim → execute → report).
+- The core backend routes and services for parse, convert, notebooks, pipelines, jobs, deployments, governance, connections, and ML are implemented under `backend/app/`.
+- The frontend now uses split workspaces under `frontend/pages/` including `home`, `flow`, `runtime`, `notebooks`, `connections`, `catalog`, `ml`, and `governance/*`.
+- Browser API traffic uses same-origin `/api`, forwarded by `frontend/pages/api/[...path].js` to the backend.
+- The agent scaffold in `agent/agent.py` demonstrates the remote-run and platform-job lifecycle (claim, heartbeat, execute, report).
 
 ## Next steps to fully match the mockup
 
 1. Add the visual mockup image to `docs/assets/nexora_overview.png` to render the preview above.
-2. Expand dashboard widgets in `frontend/pages/index.js` and implement dataset / model cards.
-3. Improve pipeline visualizer to use a full `react-flow` canvas and persist nodes to the pipeline store.
-4. Add RBAC, session management, and a production-grade auth flow (remove HMAC fallback).
+2. Deepen the summary surfaces with live operational and governance widgets without turning Home back into a mixed control-plane hub.
+3. Continue moving notebook execution toward the shared pipeline telemetry model described in `docs/NOTEBOOK_FLOW_WORKSPACE_ARCHITECTURE.md`.
+4. Add production-grade auth, secrets integration, and environment-specific Terraform wrappers around the current Helm installer.
 
 ---
 If you want, I can: (a) copy the attached mockup image into `docs/assets/` for you, or (b) generate a lightweight static HTML preview that embeds the image and the live review UI side-by-side. Which would you prefer?

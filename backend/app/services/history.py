@@ -6,13 +6,8 @@ from .comparison import compare_code
 
 
 def load_history() -> list[dict[str, Any]]:
-    query = "SELECT * FROM history ORDER BY timestamp DESC"
-    return [dict(row) for row in db.iter_rows(query)]
-
-
-def save_history(record: dict[str, Any]) -> dict[str, Any]:
-    insert_sql = """
-    INSERT OR REPLACE INTO history (
+    query = """
+    SELECT
         id,
         timestamp,
         filename,
@@ -23,24 +18,28 @@ def save_history(record: dict[str, Any]) -> dict[str, Any]:
         diff_count,
         original_preview,
         converted_preview
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    FROM history
+    ORDER BY COALESCE(timestamp, created_at) DESC
     """
+    return [dict(row) for row in db.iter_rows(query)]
+
+
+def save_history(record: dict[str, Any]) -> dict[str, Any]:
+    history_record = {
+        "id": record["id"],
+        "timestamp": record["timestamp"],
+        "filename": record["filename"],
+        "summary": record["summary"],
+        "original_length": record["original_length"],
+        "converted_length": record["converted_length"],
+        "similarity_ratio": record["similarity_ratio"],
+        "diff_count": record["diff_count"],
+        "original_preview": record["original_preview"],
+        "converted_preview": record["converted_preview"],
+        "created_at": record["timestamp"],
+    }
     with db.get_connection() as conn:
-        conn.execute(
-            insert_sql,
-            (
-                record["id"],
-                record["timestamp"],
-                record["filename"],
-                record["summary"],
-                record["original_length"],
-                record["converted_length"],
-                record["similarity_ratio"],
-                record["diff_count"],
-                record["original_preview"],
-                record["converted_preview"],
-            ),
-        )
+        db.upsert_row("history", history_record, connection=conn)
         conn.commit()
 
     return record

@@ -1,5 +1,6 @@
-import os
 from typing import Dict, Any
+
+from app.core.settings import get_openai_api_key, get_openai_model
 
 try:
     import openai
@@ -19,8 +20,8 @@ class OpenAIAdapter:
     """
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or os.getenv("NEXORA_OPENAI_API_KEY")
-        self.model = model or os.getenv("NEXORA_OPENAI_MODEL", "gpt-4o-mini")
+        self.api_key = api_key or get_openai_api_key()
+        self.model = model or get_openai_model()
         if openai and self.api_key:
             openai.api_key = self.api_key
 

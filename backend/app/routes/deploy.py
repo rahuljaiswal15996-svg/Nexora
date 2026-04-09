@@ -5,7 +5,7 @@ from app.services.deployer import DeployerService
 from app.services.finops import FinOpsService
 from app.services.governance import GovernanceService
 from app.services.history import create_history_entry, save_history
-from app.services.platform_jobs import queue_deployment
+from app.services.platform_jobs import queue_deployment, queue_deployment_rollback
 
 
 router = APIRouter(tags=["deploy"])
@@ -63,14 +63,18 @@ async def get_deployment(deployment_id: str, request: Request, principal: Princi
 async def deploy(
     request: Request,
     payload: dict = Body(...),
+    run_mode: str | None = None,
     principal: Principal = Depends(require_admin),
 ):
     tenant_id = principal_tenant(request, principal)
     user_id = principal_user(principal)
     pipeline_id = payload.get("pipeline_id") or payload.get("artifact_id")
     target_platform = (payload.get("target_platform") or payload.get("platform") or "container").strip()
+    execution_mode = (run_mode or payload.get("run_mode") or "local").strip().lower()
     if not pipeline_id:
         raise HTTPException(status_code=400, detail="pipeline_id or artifact_id is required")
+    if execution_mode not in {"local", "remote"}:
+        raise HTTPException(status_code=400, detail="run_mode must be 'local' or 'remote'")
 
     queued = queue_deployment(
         tenant_id=tenant_id,
@@ -79,6 +83,7 @@ async def deploy(
         created_by=user_id,
         target_id=payload.get("target_id"),
         target_config=payload.get("target_config") or {},
+        run_mode=execution_mode,
     )
     deployment = queued["deployment"]
 
@@ -104,9 +109,41 @@ async def deploy(
 
     governance_service.log_action(tenant_id, user_id, "deploy", "pipeline", str(pipeline_id), None, deployment)
     return {
-        "status": "queued",
+        "status": "queued_remote" if execution_mode == "remote" else "queued",
         "tenant_id": tenant_id,
         "job": queued["job"],
         "deployment": deployment,
         "deployed_at": now,
+    }
+
+
+@router.post("/deployments/{deployment_id}/rollback")
+async def rollback_deployment(
+    deployment_id: str,
+    request: Request,
+    payload: dict = Body(default={}),
+    principal: Principal = Depends(require_admin),
+):
+    tenant_id = principal_tenant(request, principal)
+    user_id = principal_user(principal)
+    execution_mode = (payload.get("run_mode") or "local").strip().lower()
+    if execution_mode not in {"local", "remote"}:
+        raise HTTPException(status_code=400, detail="run_mode must be 'local' or 'remote'")
+
+    try:
+        queued = queue_deployment_rollback(
+            tenant_id=tenant_id,
+            deployment_id=deployment_id,
+            created_by=user_id,
+            run_mode=execution_mode,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    governance_service.log_action(tenant_id, user_id, "rollback", "deployment", deployment_id, None, queued["deployment"])
+    return {
+        "status": "queued_remote" if execution_mode == "remote" else "queued",
+        "tenant_id": tenant_id,
+        "job": queued["job"],
+        "deployment": queued["deployment"],
     }

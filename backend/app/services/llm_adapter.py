@@ -1,5 +1,6 @@
-import os
-from typing import Dict, Any
+from typing import Dict, Any, cast
+
+from app.core.settings import get_llm_provider
 
 
 class LLMAdapter:
@@ -37,24 +38,25 @@ class MockAdapter(LLMAdapter):
         }
 
 
-# configure global adapter from environment (supports pluggable providers)
-_provider = os.getenv("NEXORA_LLM_PROVIDER", "mock").lower()
-if _provider == "openai":
-    try:
-        from app.services.providers.openai_adapter import OpenAIAdapter
+_registered_adapter: LLMAdapter | None = None
 
-        _default_adapter: LLMAdapter = OpenAIAdapter()
-    except Exception:
-        # fallback to mock adapter if provider initialization fails
-        _default_adapter: LLMAdapter = MockAdapter()
-else:
-    _default_adapter: LLMAdapter = MockAdapter()
+
+def _build_default_adapter() -> LLMAdapter:
+    provider = get_llm_provider()
+    if provider == "openai":
+        try:
+            from app.services.providers.openai_adapter import OpenAIAdapter
+
+            return cast(LLMAdapter, OpenAIAdapter())
+        except Exception:
+            return MockAdapter()
+    return MockAdapter()
 
 
 def get_adapter() -> LLMAdapter:
-    return _default_adapter
+    return _registered_adapter or _build_default_adapter()
 
 
 def register_adapter(adapter: LLMAdapter) -> None:
-    global _default_adapter
-    _default_adapter = adapter
+    global _registered_adapter
+    _registered_adapter = adapter
